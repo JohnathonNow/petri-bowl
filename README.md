@@ -16,7 +16,7 @@ Player Input:
 	Play call number [int]
 	Relative positions of every player on the field [array of pairs of int]
 		0 is on top of player, 1-4 are literal field units, 5 is within 32 field units, 6 is within 128 field units, 7 is past that
-	Position on the field, where x=0 is your own goal line, x=300 is the opposing endzone [pair of int]
+	Position on the field, where x=0 is your own goal line, x=255 is the opposing endzone [pair of int]
 	Can ball be thrown, becomes false if ball passes line of scrimmage or is passed forward [bool]	
 	
 Player Output:
