@@ -1,3 +1,9 @@
+NOTE: This project is in the ideation phase and currently there's no code here.
+
+Basically, the general idea is to make a game where players draw simple neural networks
+using the inputs below for simple amoeba to follow. Each amoeba has breedable traits.
+The amoeba are then trained to play a simplified version of American Football.
+
 Game is played on a 256x128 grid
 Game is 60 minutes
 Players can occupy tenths of a grid unit
