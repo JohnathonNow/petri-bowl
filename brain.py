@@ -5,7 +5,7 @@ def loss(output, target):
     if target > 0:
         return torch.mean(output - output)
     else:
-        return -torch.mean(output) / 100
+        return torch.mean(-(output**2)) / 100
 
 model = torch.nn.Linear(2, 2, 1)
 x = torch.randn(1, 2)
