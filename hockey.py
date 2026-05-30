@@ -105,7 +105,8 @@ class HockeyEnv:
         check_collision(self.p1_pos)
         check_collision(self.p2_pos)
 
-        done = self.steps >= 200
+        #print(self.p1_pos, self.p2_pos, self.puck_pos)
+        done = self.steps >= 20000 #0
         return done
 
     def _reset_positions(self):
@@ -166,7 +167,7 @@ def train():
             loss2.backward()
             opt2.step()
 
-        if epoch % 10 == 0:
+        if True: #epoch % 10 == 0:
             print(f"Epoch {epoch}: Score {env.score[0]} - {env.score[1]}")
 
 if __name__ == '__main__':
