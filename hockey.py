@@ -130,9 +130,9 @@ def run_server():
 class PlayerNet(nn.Module):
     def __init__(self):
         super(PlayerNet, self).__init__()
-        # Input: player x, player y, puck x, puck y
-        self.fc1 = nn.Linear(4, 16)
-        self.fc2 = nn.Linear(16, 4)
+        # Input: player x, player y, puck x, puck y, 11 other players' x, y
+        self.fc1 = nn.Linear(26, 64)
+        self.fc2 = nn.Linear(64, 5)
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))
@@ -153,7 +153,7 @@ class HockeyEnv:
     def step(self, actions1, actions2):
         self.steps += 1
 
-        # actions: 0=up, 1=down, 2=left, 3=right
+        # actions: 0=up, 1=down, 2=left, 3=right, 4=stay
         speed = 2.0
 
         # move p1
@@ -250,6 +250,36 @@ class HockeyEnv:
         self.puck_pos = [50.0, 25.0]
         self.puck_vel = [0.0, 0.0]
 
+def get_state(env, team, player_idx):
+    if team == 1:
+        my_pos = env.p1_pos[player_idx]
+        other_players = [env.p1_pos[i] for i in range(len(env.p1_pos)) if i != player_idx] + env.p2_pos
+    else:
+        my_pos = env.p2_pos[player_idx]
+        other_players = [env.p2_pos[i] for i in range(len(env.p2_pos)) if i != player_idx] + env.p1_pos
+
+    state = [my_pos[0]/100.0, my_pos[1]/50.0, env.puck_pos[0]/100.0, env.puck_pos[1]/50.0]
+    for p in other_players:
+        state.extend([p[0]/100.0, p[1]/50.0])
+    
+    return torch.tensor(state, dtype=torch.float32)
+
+def get_expert_action(px, py, tx, ty):
+    dx = tx - px
+    dy = ty - py
+    if abs(dx) < 1.0 and abs(dy) < 1.0:
+        return 4 # stay
+    if abs(dx) > abs(dy):
+        if dx > 0:
+            return 3 # right
+        else:
+            return 2 # left
+    else:
+        if dy > 0:
+            return 1 # down
+        else:
+            return 0 # up
+
 def train(use_web=False):
     global global_env
     net1_skater = PlayerNet()
@@ -270,6 +300,82 @@ def train(use_web=False):
         server_thread.start()
         print("Web UI running at http://localhost:8080/")
 
+    print("Starting pre-training phase...")
+    for _ in range(10):
+        env.reset()
+        for _ in range(20000): # max steps per pre-train epoch
+            actions1 = []
+            actions2 = []
+            
+            loss1_s = 0
+            loss1_g = 0
+            loss2_s = 0
+            loss2_g = 0
+            
+            for i in range(6):
+                # Team 1
+                state1 = get_state(env, 1, i)
+                if i == 0:
+                    probs1 = net1_goalie(state1)
+                    target_x, target_y = 5.0, env.puck_pos[1]
+                else:
+                    probs1 = net1_skater(state1)
+                    target_x, target_y = env.puck_pos[0], env.puck_pos[1]
+                
+                m1 = torch.distributions.Categorical(probs1)
+                action1 = m1.sample()
+                actions1.append(action1.item())
+                
+                exp_a1 = get_expert_action(env.p1_pos[i][0], env.p1_pos[i][1], target_x, target_y)
+                if i == 0:
+                    loss1_g = loss1_g - torch.log(probs1[exp_a1] + 1e-8)
+                else:
+                    loss1_s = loss1_s - torch.log(probs1[exp_a1] + 1e-8)
+                    
+                # Team 2
+                state2 = get_state(env, 2, i)
+                if i == 0:
+                    probs2 = net2_goalie(state2)
+                    target_x, target_y = 95.0, env.puck_pos[1]
+                else:
+                    probs2 = net2_skater(state2)
+                    target_x, target_y = env.puck_pos[0], env.puck_pos[1]
+                    
+                m2 = torch.distributions.Categorical(probs2)
+                action2 = m2.sample()
+                actions2.append(action2.item())
+                
+                exp_a2 = get_expert_action(env.p2_pos[i][0], env.p2_pos[i][1], target_x, target_y)
+                if i == 0:
+                    loss2_g = loss2_g - torch.log(probs2[exp_a2] + 1e-8)
+                else:
+                    loss2_s = loss2_s - torch.log(probs2[exp_a2] + 1e-8)
+
+            opt1_skater.zero_grad()
+            if type(loss1_s) != int:
+                loss1_s.backward()
+                opt1_skater.step()
+                
+            opt1_goalie.zero_grad()
+            if type(loss1_g) != int:
+                loss1_g.backward()
+                opt1_goalie.step()
+                
+            opt2_skater.zero_grad()
+            if type(loss2_s) != int:
+                loss2_s.backward()
+                opt2_skater.step()
+                
+            opt2_goalie.zero_grad()
+            if type(loss2_g) != int:
+                loss2_g.backward()
+                opt2_goalie.step()
+
+            done = env.step(actions1, actions2)
+            if done:
+                break
+    print("Pre-training phase complete.")
+
     epochs = 100
     for epoch in range(epochs):
         env.reset()
@@ -285,7 +391,7 @@ def train(use_web=False):
             actions2 = []
 
             for i in range(6):
-                state1 = torch.tensor([env.p1_pos[i][0]/100.0, env.p1_pos[i][1]/50.0, env.puck_pos[0]/100.0, env.puck_pos[1]/50.0], dtype=torch.float32)
+                state1 = get_state(env, 1, i)
                 if i == 0:
                     probs1 = net1_goalie(state1)
                 else:
@@ -298,7 +404,7 @@ def train(use_web=False):
                 else:
                     log_probs1_skater.append(m1.log_prob(action1))
 
-                state2 = torch.tensor([env.p2_pos[i][0]/100.0, env.p2_pos[i][1]/50.0, env.puck_pos[0]/100.0, env.puck_pos[1]/50.0], dtype=torch.float32)
+                state2 = get_state(env, 2, i)
                 if i == 0:
                     probs2 = net2_goalie(state2)
                 else:
@@ -363,3 +469,4 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     train(use_web=args.web)
+
