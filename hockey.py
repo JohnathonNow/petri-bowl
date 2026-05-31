@@ -396,18 +396,36 @@ def get_expert_action(px, py, tx, ty):
             return 1 # down
         else:
             return 0 # up
+class Agent:
+    def __init__(self, is_goalie=False):
+        self.net = PlayerNet()
+        self.opt = optim.Adam(self.net.parameters(), lr=0.01)
+        self.log_probs = []
+        self.is_goalie = is_goalie
+
+    def get_action(self, state):
+        probs = self.net(state)
+        m = torch.distributions.Categorical(probs)
+        action = m.sample()
+        return action.item(), m.log_prob(action)
+
+    def get_action_pretrain(self, state, expert_action):
+        probs = self.net(state)
+        m = torch.distributions.Categorical(probs)
+        action = m.sample()
+        loss = -torch.log(probs[expert_action] + 1e-8)
+        return action.item(), loss
+
+class Team:
+    def __init__(self):
+        # Index 0 is goalie, 1-5 are skaters
+        self.agents = [Agent(is_goalie=True)] + [Agent(is_goalie=False) for _ in range(5)]
+
 pretrain=True
 def train(use_web=False):
     global global_env
-    net1_skater = PlayerNet()
-    net1_goalie = PlayerNet()
-    net2_skater = PlayerNet()
-    net2_goalie = PlayerNet()
-
-    opt1_skater = optim.Adam(net1_skater.parameters(), lr=0.01)
-    opt1_goalie = optim.Adam(net1_goalie.parameters(), lr=0.01)
-    opt2_skater = optim.Adam(net2_skater.parameters(), lr=0.01)
-    opt2_goalie = optim.Adam(net2_goalie.parameters(), lr=0.01)
+    team1 = Team()
+    team2 = Team()
 
     env = HockeyEnv()
     global_env = env
@@ -415,95 +433,64 @@ def train(use_web=False):
     if use_web:
         server_thread = threading.Thread(target=run_server, daemon=True)
         server_thread.start()
-        print("Web UI running at http://localhost:8080/")
+        print("Web UI running at http://localhost:8080/", flush=True)
 
-    print("Starting pre-training phase...")
+    print("Starting pre-training phase...", flush=True)
     for _ in range(5):
         env.reset()
         for _ in range(400): # max steps per pre-train epoch
             actions1 = []
             actions2 = []
             
-            loss1_s = 0
-            loss1_g = 0
-            loss2_s = 0
-            loss2_g = 0
+            losses = []
             
             for i in range(6):
                 # Team 1
                 state1 = get_state(env, 1, i)
                 if i == 0:
-                    probs1 = net1_goalie(state1)
                     target_x, target_y = 12.0, env.puck_pos[1]
                 else:
-                    probs1 = net1_skater(state1)
                     if i in [1, 2]:
                         target_x, target_y = min(env.puck_pos[0], 45.0), env.puck_pos[1]
                     else:
                         target_x, target_y = env.puck_pos[0], env.puck_pos[1]
                 
-                m1 = torch.distributions.Categorical(probs1)
-                action1 = m1.sample()
-                actions1.append(action1.item())
-                
                 exp_a1 = get_expert_action(env.p1_pos[i][0], env.p1_pos[i][1], target_x, target_y)
-                if i == 0:
-                    loss1_g = loss1_g - torch.log(probs1[exp_a1] + 1e-8)
-                else:
-                    l = -torch.log(probs1[exp_a1] + 1e-8)
-                    if i in [1, 2] and env.p1_pos[i][0] > 50.0:
-                        l = l * 5.0
-                    loss1_s = loss1_s + l
+                action1, loss1 = team1.agents[i].get_action_pretrain(state1, exp_a1)
+
+                if i in [1, 2] and env.p1_pos[i][0] > 50.0:
+                    loss1 = loss1 * 5.0
+                actions1.append(action1)
+                losses.append((team1.agents[i], loss1))
                     
                 # Team 2
                 state2 = get_state(env, 2, i)
                 if i == 0:
-                    probs2 = net2_goalie(state2)
                     target_x, target_y = 88.0, env.puck_pos[1]
                 else:
-                    probs2 = net2_skater(state2)
                     if i in [1, 2]:
                         target_x, target_y = max(env.puck_pos[0], 55.0), env.puck_pos[1]
                     else:
                         target_x, target_y = env.puck_pos[0], env.puck_pos[1]
                     
-                m2 = torch.distributions.Categorical(probs2)
-                action2 = m2.sample()
-                actions2.append(action2.item())
-                
                 exp_a2 = get_expert_action(env.p2_pos[i][0], env.p2_pos[i][1], target_x, target_y)
-                if i == 0:
-                    loss2_g = loss2_g - torch.log(probs2[exp_a2] + 1e-8)
-                else:
-                    l = -torch.log(probs2[exp_a2] + 1e-8)
-                    if i in [1, 2] and env.p2_pos[i][0] < 50.0:
-                        l = l * 5.0
-                    loss2_s = loss2_s + l
+                action2, loss2 = team2.agents[i].get_action_pretrain(state2, exp_a2)
+                
+                if i in [1, 2] and env.p2_pos[i][0] < 50.0:
+                    loss2 = loss2 * 5.0
+                actions2.append(action2)
+                losses.append((team2.agents[i], loss2))
 
-            opt1_skater.zero_grad()
-            if type(loss1_s) != int:
-                loss1_s.backward()
-                opt1_skater.step()
-                
-            opt1_goalie.zero_grad()
-            if type(loss1_g) != int:
-                loss1_g.backward()
-                opt1_goalie.step()
-                
-            opt2_skater.zero_grad()
-            if type(loss2_s) != int:
-                loss2_s.backward()
-                opt2_skater.step()
-                
-            opt2_goalie.zero_grad()
-            if type(loss2_g) != int:
-                loss2_g.backward()
-                opt2_goalie.step()
+            for agent, loss in losses:
+                agent.opt.zero_grad()
+                if type(loss) != int and loss.requires_grad:
+                    loss.backward()
+                    agent.opt.step()
 
             done = env.step(actions1, actions2)
             if done:
                 break
-    print("Pre-training phase complete.")
+    print("Pre-training phase complete.", flush=True)
     pretrain=False
 
     epochs = 100
@@ -511,10 +498,10 @@ def train(use_web=False):
         env.reset()
         done = False
 
-        log_probs1_skater = []
-        log_probs1_goalie = []
-        log_probs2_skater = []
-        log_probs2_goalie = []
+        # Clear log probs for new episode
+        for team in [team1, team2]:
+            for agent in team.agents:
+                agent.log_probs = []
 
         while not done:
             actions1 = []
@@ -522,77 +509,33 @@ def train(use_web=False):
 
             for i in range(6):
                 state1 = get_state(env, 1, i)
-                if i == 0:
-                    probs1 = net1_goalie(state1)
-                else:
-                    probs1 = net1_skater(state1)
-                m1 = torch.distributions.Categorical(probs1)
-                action1 = m1.sample()
-                actions1.append(action1.item())
-                if i == 0:
-                    log_probs1_goalie.append(m1.log_prob(action1))
-                else:
-                    log_probs1_skater.append(m1.log_prob(action1))
+                action1, log_prob1 = team1.agents[i].get_action(state1)
+                actions1.append(action1)
+                team1.agents[i].log_probs.append(log_prob1)
 
                 state2 = get_state(env, 2, i)
-                if i == 0:
-                    probs2 = net2_goalie(state2)
-                else:
-                    probs2 = net2_skater(state2)
-                m2 = torch.distributions.Categorical(probs2)
-                action2 = m2.sample()
-                actions2.append(action2.item())
-                if i == 0:
-                    log_probs2_goalie.append(m2.log_prob(action2))
-                else:
-                    log_probs2_skater.append(m2.log_prob(action2))
+                action2, log_prob2 = team2.agents[i].get_action(state2)
+                actions2.append(action2)
+                team2.agents[i].log_probs.append(log_prob2)
 
             done = env.step(actions1, actions2)
-            if use_web:
-                pass
-                #time.sleep(0.01)
 
         reward1 = float(env.score[0] - env.score[1])
         reward2 = float(env.score[1] - env.score[0])
 
-        loss1_skater = 0
-        for lp in log_probs1_skater:
-            loss1_skater = loss1_skater - lp * reward1
+        for team, reward in [(team1, reward1), (team2, reward2)]:
+            for agent in team.agents:
+                loss = 0
+                for lp in agent.log_probs:
+                    loss = loss - lp * reward
 
-        loss1_goalie = 0
-        for lp in log_probs1_goalie:
-            loss1_goalie = loss1_goalie - lp * reward1
-
-        opt1_skater.zero_grad()
-        if type(loss1_skater) != int and loss1_skater.requires_grad:
-            loss1_skater.backward()
-            opt1_skater.step()
-
-        opt1_goalie.zero_grad()
-        if type(loss1_goalie) != int and loss1_goalie.requires_grad:
-            loss1_goalie.backward()
-            opt1_goalie.step()
-
-        loss2_skater = 0
-        for lp in log_probs2_skater:
-            loss2_skater = loss2_skater - lp * reward2
-
-        loss2_goalie = 0
-        for lp in log_probs2_goalie:
-            loss2_goalie = loss2_goalie - lp * reward2
-
-        opt2_skater.zero_grad()
-        if type(loss2_skater) != int and loss2_skater.requires_grad:
-            loss2_skater.backward()
-            opt2_skater.step()
-
-        opt2_goalie.zero_grad()
-        if type(loss2_goalie) != int and loss2_goalie.requires_grad:
-            loss2_goalie.backward()
-            opt2_goalie.step()
+                agent.opt.zero_grad()
+                if type(loss) != int and loss.requires_grad:
+                    loss.backward()
+                    agent.opt.step()
 
         if True: #epoch % 10 == 0:
-            print(f"Epoch {epoch}: Score {env.score[0]} - {env.score[1]}")
+            print(f"Epoch {epoch}: Score {env.score[0]} - {env.score[1]}", flush=True)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Train a hockey AI")
