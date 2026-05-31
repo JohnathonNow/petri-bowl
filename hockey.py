@@ -36,17 +36,34 @@ HTML_PAGE = """
         function drawGame(state) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+            // Draw rounded rink boundary
+            const r = 15 * scaleX; // radius
+            ctx.beginPath();
+            ctx.moveTo(r, 0);
+            ctx.lineTo(canvas.width - r, 0);
+            ctx.arcTo(canvas.width, 0, canvas.width, r, r);
+            ctx.lineTo(canvas.width, canvas.height - r);
+            ctx.arcTo(canvas.width, canvas.height, canvas.width - r, canvas.height, r);
+            ctx.lineTo(r, canvas.height);
+            ctx.arcTo(0, canvas.height, 0, canvas.height - r, r);
+            ctx.lineTo(0, r);
+            ctx.arcTo(0, 0, r, 0, r);
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
             // Draw center line
             ctx.beginPath();
             ctx.moveTo(canvas.width / 2, 0);
             ctx.lineTo(canvas.width / 2, canvas.height);
             ctx.strokeStyle = 'red';
+            ctx.lineWidth = 1;
             ctx.stroke();
 
-            // Draw goals (y between 15 and 35)
+            // Draw goals (y between 15 and 35, x at 10 and 90)
             ctx.fillStyle = 'black';
-            ctx.fillRect(0, 15 * scaleY, 5, 20 * scaleY);
-            ctx.fillRect(canvas.width - 5, 15 * scaleY, 5, 20 * scaleY);
+            ctx.fillRect(10 * scaleX - 5, 15 * scaleY, 5, 20 * scaleY);
+            ctx.fillRect(90 * scaleX, 15 * scaleY, 5, 20 * scaleY);
 
             // Draw team 1
             state.p1_pos.forEach((pos, idx) => {
@@ -154,29 +171,35 @@ class HockeyEnv:
         self.steps += 1
 
         # actions: 0=up, 1=down, 2=left, 3=right, 4=stay
-        speed = 2.0
+        speed = 0.2
 
         # move p1
         for i in range(len(self.p1_pos)):
-            if actions1[i] == 0: self.p1_pos[i][1] -= speed
-            elif actions1[i] == 1: self.p1_pos[i][1] += speed
-            elif actions1[i] == 2: self.p1_pos[i][0] -= speed
-            elif actions1[i] == 3: self.p1_pos[i][0] += speed
-
-            # Keep players in bounds
-            self.p1_pos[i][0] = max(0, min(self.width, self.p1_pos[i][0]))
-            self.p1_pos[i][1] = max(0, min(self.height, self.p1_pos[i][1]))
+            if actions1[i] == 0: self.p1_vel[i][1] -= speed
+            elif actions1[i] == 1: self.p1_vel[i][1] += speed
+            elif actions1[i] == 2: self.p1_vel[i][0] -= speed
+            elif actions1[i] == 3: self.p1_vel[i][0] += speed
+            
+            self.p1_vel[i][0] *= 0.90
+            self.p1_vel[i][1] *= 0.90
+            
+            self.p1_pos[i][0] += self.p1_vel[i][0]
+            self.p1_pos[i][1] += self.p1_vel[i][1]
+            self._apply_bounds(self.p1_pos[i], self.p1_vel[i])
 
         # move p2
         for i in range(len(self.p2_pos)):
-            if actions2[i] == 0: self.p2_pos[i][1] -= speed
-            elif actions2[i] == 1: self.p2_pos[i][1] += speed
-            elif actions2[i] == 2: self.p2_pos[i][0] -= speed
-            elif actions2[i] == 3: self.p2_pos[i][0] += speed
-
-            # Keep players in bounds
-            self.p2_pos[i][0] = max(0, min(self.width, self.p2_pos[i][0]))
-            self.p2_pos[i][1] = max(0, min(self.height, self.p2_pos[i][1]))
+            if actions2[i] == 0: self.p2_vel[i][1] -= speed
+            elif actions2[i] == 1: self.p2_vel[i][1] += speed
+            elif actions2[i] == 2: self.p2_vel[i][0] -= speed
+            elif actions2[i] == 3: self.p2_vel[i][0] += speed
+            
+            self.p2_vel[i][0] *= 0.90
+            self.p2_vel[i][1] *= 0.90
+            
+            self.p2_pos[i][0] += self.p2_vel[i][0]
+            self.p2_pos[i][1] += self.p2_vel[i][1]
+            self._apply_bounds(self.p2_pos[i], self.p2_vel[i])
 
         # Puck physics (simplified)
         self.puck_pos[0] += self.puck_vel[0]
@@ -186,32 +209,35 @@ class HockeyEnv:
         self.puck_vel[0] *= 0.95
         self.puck_vel[1] *= 0.95
 
-        # Wall bounces for puck
-        if self.puck_pos[1] <= 0:
-            self.puck_pos[1] = 0
-            self.puck_vel[1] *= -1
-        elif self.puck_pos[1] >= self.height:
-            self.puck_pos[1] = self.height
-            self.puck_vel[1] *= -1
+        self._apply_bounds(self.puck_pos, self.puck_vel)
 
         # Goals (y between 15 and 35)
         goal_y_min = 15
         goal_y_max = 35
 
-        if self.puck_pos[0] <= 0:
+        if self.puck_pos[0] <= 10.0:
             if goal_y_min <= self.puck_pos[1] <= goal_y_max:
                 self.score[1] += 1
                 self._reset_positions()
             else:
-                self.puck_pos[0] = 0
+                self.puck_pos[0] = 10.0
                 self.puck_vel[0] *= -1
-        elif self.puck_pos[0] >= self.width:
+        elif self.puck_pos[0] >= 90.0:
             if goal_y_min <= self.puck_pos[1] <= goal_y_max:
                 self.score[0] += 1
                 self._reset_positions()
             else:
-                self.puck_pos[0] = self.width
+                self.puck_pos[0] = 90.0
                 self.puck_vel[0] *= -1
+
+        # Goalie constraints
+        # Team 1 goalie
+        self.p1_pos[0][0] = max(0.0, min(20.0, self.p1_pos[0][0]))
+        self.p1_pos[0][1] = max(10.0, min(40.0, self.p1_pos[0][1]))
+        
+        # Team 2 goalie
+        self.p2_pos[0][0] = max(80.0, min(100.0, self.p2_pos[0][0]))
+        self.p2_pos[0][1] = max(10.0, min(40.0, self.p2_pos[0][1]))
 
         # Player-puck collisions
         def check_collision(p_pos):
@@ -235,6 +261,49 @@ class HockeyEnv:
         done = self.steps >= 20000 #0
         return done
 
+    def _apply_bounds(self, pos, vel, radius=15.0):
+        # rectangular bounds
+        if pos[0] < 0:
+            pos[0] = 0
+            vel[0] *= -1
+        elif pos[0] > self.width:
+            pos[0] = self.width
+            vel[0] *= -1
+
+        if pos[1] < 0:
+            pos[1] = 0
+            vel[1] *= -1
+        elif pos[1] > self.height:
+            pos[1] = self.height
+            vel[1] *= -1
+
+        # rounded corners
+        corners = [
+            (radius, radius),
+            (self.width - radius, radius),
+            (radius, self.height - radius),
+            (self.width - radius, self.height - radius)
+        ]
+        
+        for cx, cy in corners:
+            # check if pos is in the square corner region
+            if (pos[0] < radius and cx == radius) or (pos[0] > self.width - radius and cx == self.width - radius):
+                if (pos[1] < radius and cy == radius) or (pos[1] > self.height - radius and cy == self.height - radius):
+                    dx = pos[0] - cx
+                    dy = pos[1] - cy
+                    dist = (dx**2 + dy**2)**0.5
+                    if dist > radius:
+                        # project back to the circle
+                        pos[0] = cx + (dx / dist) * radius
+                        pos[1] = cy + (dy / dist) * radius
+                        
+                        # reflect velocity across normal
+                        nx = dx / dist
+                        ny = dy / dist
+                        dot = vel[0] * nx + vel[1] * ny
+                        vel[0] -= 2 * dot * nx
+                        vel[1] -= 2 * dot * ny
+
     def _reset_positions(self):
         # 5 skaters, 1 goalie (index 0 is goalie)
         self.p1_pos = [
@@ -247,6 +316,8 @@ class HockeyEnv:
             [75.0, 10.0], [75.0, 25.0], [75.0, 40.0],
             [60.0, 15.0], [60.0, 35.0]
         ]
+        self.p1_vel = [[0.0, 0.0] for _ in range(6)]
+        self.p2_vel = [[0.0, 0.0] for _ in range(6)]
         self.puck_pos = [50.0, 25.0]
         self.puck_vel = [0.0, 0.0]
 
@@ -320,7 +391,10 @@ def train(use_web=False):
                     target_x, target_y = 5.0, env.puck_pos[1]
                 else:
                     probs1 = net1_skater(state1)
-                    target_x, target_y = env.puck_pos[0], env.puck_pos[1]
+                    if i in [1, 2]:
+                        target_x, target_y = min(env.puck_pos[0], 45.0), env.puck_pos[1]
+                    else:
+                        target_x, target_y = env.puck_pos[0], env.puck_pos[1]
                 
                 m1 = torch.distributions.Categorical(probs1)
                 action1 = m1.sample()
@@ -331,6 +405,8 @@ def train(use_web=False):
                     loss1_g = loss1_g - torch.log(probs1[exp_a1] + 1e-8)
                 else:
                     loss1_s = loss1_s - torch.log(probs1[exp_a1] + 1e-8)
+                    if i in [1, 2] and env.p1_pos[i][0] < 50.0:
+                        loss1_s -= 0.1
                     
                 # Team 2
                 state2 = get_state(env, 2, i)
@@ -339,7 +415,10 @@ def train(use_web=False):
                     target_x, target_y = 95.0, env.puck_pos[1]
                 else:
                     probs2 = net2_skater(state2)
-                    target_x, target_y = env.puck_pos[0], env.puck_pos[1]
+                    if i in [1, 2]:
+                        target_x, target_y = max(env.puck_pos[0], 55.0), env.puck_pos[1]
+                    else:
+                        target_x, target_y = env.puck_pos[0], env.puck_pos[1]
                     
                 m2 = torch.distributions.Categorical(probs2)
                 action2 = m2.sample()
@@ -350,6 +429,8 @@ def train(use_web=False):
                     loss2_g = loss2_g - torch.log(probs2[exp_a2] + 1e-8)
                 else:
                     loss2_s = loss2_s - torch.log(probs2[exp_a2] + 1e-8)
+                    if i in [1, 2] and env.p2_pos[i][0] > 50.0:
+                        loss2_s -= 0.1
 
             opt1_skater.zero_grad()
             if type(loss1_s) != int:
@@ -469,4 +550,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     train(use_web=args.web)
+
 
