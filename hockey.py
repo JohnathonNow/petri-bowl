@@ -62,8 +62,8 @@ HTML_PAGE = """
 
             // Draw goals (y between 15 and 35, x at 10 and 90)
             ctx.fillStyle = 'black';
-            ctx.fillRect(10 * scaleX - 5, 15 * scaleY, 5, 20 * scaleY);
-            ctx.fillRect(90 * scaleX, 15 * scaleY, 5, 20 * scaleY);
+            ctx.fillRect(10 * scaleX - 5, 21 * scaleY, 5, 8 * scaleY);
+            ctx.fillRect(90 * scaleX, 21 * scaleY, 5, 8 * scaleY);
 
             // Draw team 1
             state.p1_pos.forEach((pos, idx) => {
@@ -212,8 +212,8 @@ class HockeyEnv:
         self._apply_bounds(self.puck_pos, self.puck_vel)
 
         # Goals (y between 15 and 35)
-        goal_y_min = 15
-        goal_y_max = 35
+        goal_y_min = 21
+        goal_y_max = 29
 
         if self.puck_pos[0] <= 10.0:
             if goal_y_min <= self.puck_pos[1] <= goal_y_max:
