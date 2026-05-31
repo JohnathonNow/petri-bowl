@@ -186,6 +186,7 @@ class HockeyEnv:
             self.p1_pos[i][0] += self.p1_vel[i][0]
             self.p1_pos[i][1] += self.p1_vel[i][1]
             self._apply_bounds(self.p1_pos[i], self.p1_vel[i])
+            self._resolve_net_collision(self.p1_pos[i], self.p1_vel[i], False)
 
         # move p2
         for i in range(len(self.p2_pos)):
@@ -200,8 +201,10 @@ class HockeyEnv:
             self.p2_pos[i][0] += self.p2_vel[i][0]
             self.p2_pos[i][1] += self.p2_vel[i][1]
             self._apply_bounds(self.p2_pos[i], self.p2_vel[i])
+            self._resolve_net_collision(self.p2_pos[i], self.p2_vel[i], False)
 
         # Puck physics (simplified)
+        old_puck_x = self.puck_pos[0]
         self.puck_pos[0] += self.puck_vel[0]
         self.puck_pos[1] += self.puck_vel[1]
 
@@ -215,28 +218,28 @@ class HockeyEnv:
         goal_y_min = 21
         goal_y_max = 29
 
-        if self.puck_pos[0] <= 10.0:
+        scored_goal = False
+        if old_puck_x > 10.0 and self.puck_pos[0] <= 10.0:
             if goal_y_min <= self.puck_pos[1] <= goal_y_max:
                 self.score[1] += 1
                 self._reset_positions()
-            else:
-                self.puck_pos[0] = 10.0
-                self.puck_vel[0] *= -1
-        elif self.puck_pos[0] >= 90.0:
+                scored_goal = True
+        elif old_puck_x < 90.0 and self.puck_pos[0] >= 90.0:
             if goal_y_min <= self.puck_pos[1] <= goal_y_max:
                 self.score[0] += 1
                 self._reset_positions()
-            else:
-                self.puck_pos[0] = 90.0
-                self.puck_vel[0] *= -1
+                scored_goal = True
+
+        if not scored_goal:
+            self._resolve_net_collision(self.puck_pos, self.puck_vel, True)
 
         # Goalie constraints
         # Team 1 goalie
-        self.p1_pos[0][0] = max(0.0, min(20.0, self.p1_pos[0][0]))
+        self.p1_pos[0][0] = max(10.0, min(20.0, self.p1_pos[0][0]))
         self.p1_pos[0][1] = max(10.0, min(40.0, self.p1_pos[0][1]))
         
         # Team 2 goalie
-        self.p2_pos[0][0] = max(80.0, min(100.0, self.p2_pos[0][0]))
+        self.p2_pos[0][0] = max(80.0, min(90.0, self.p2_pos[0][0]))
         self.p2_pos[0][1] = max(10.0, min(40.0, self.p2_pos[0][1]))
 
         # Player-puck collisions
@@ -260,6 +263,49 @@ class HockeyEnv:
         #print(self.p1_pos, self.p2_pos, self.puck_pos)
         done = self.steps >= 20000 #0
         return done
+
+    def _resolve_net_collision(self, pos, vel, is_puck):
+        # Team 1 net: x in [5, 10], y in [21, 29]
+        if 5.0 <= pos[0] <= 10.0 and 21.0 <= pos[1] <= 29.0:
+            dx1 = pos[0] - 5.0
+            dx2 = 10.0 - pos[0]
+            dy1 = pos[1] - 21.0
+            dy2 = 29.0 - pos[1]
+            min_d = min(dx1, dx2, dy1, dy2)
+
+            if min_d == dx1:
+                pos[0] = 5.0
+                vel[0] = -vel[0] if is_puck else 0.0
+            elif min_d == dx2:
+                pos[0] = 10.0
+                vel[0] = -vel[0] if is_puck else 0.0
+            elif min_d == dy1:
+                pos[1] = 21.0
+                vel[1] = -vel[1] if is_puck else 0.0
+            else:
+                pos[1] = 29.0
+                vel[1] = -vel[1] if is_puck else 0.0
+
+        # Team 2 net: x in [90, 95], y in [21, 29]
+        elif 90.0 <= pos[0] <= 95.0 and 21.0 <= pos[1] <= 29.0:
+            dx1 = pos[0] - 90.0
+            dx2 = 95.0 - pos[0]
+            dy1 = pos[1] - 21.0
+            dy2 = 29.0 - pos[1]
+            min_d = min(dx1, dx2, dy1, dy2)
+
+            if min_d == dx1:
+                pos[0] = 90.0
+                vel[0] = -vel[0] if is_puck else 0.0
+            elif min_d == dx2:
+                pos[0] = 95.0
+                vel[0] = -vel[0] if is_puck else 0.0
+            elif min_d == dy1:
+                pos[1] = 21.0
+                vel[1] = -vel[1] if is_puck else 0.0
+            else:
+                pos[1] = 29.0
+                vel[1] = -vel[1] if is_puck else 0.0
 
     def _apply_bounds(self, pos, vel, radius=15.0):
         # rectangular bounds
@@ -307,12 +353,12 @@ class HockeyEnv:
     def _reset_positions(self):
         # 5 skaters, 1 goalie (index 0 is goalie)
         self.p1_pos = [
-            [5.0, 25.0],
+            [12.0, 25.0],
             [25.0, 10.0], [25.0, 25.0], [25.0, 40.0],
             [40.0, 15.0], [40.0, 35.0]
         ]
         self.p2_pos = [
-            [95.0, 25.0],
+            [88.0, 25.0],
             [75.0, 10.0], [75.0, 25.0], [75.0, 40.0],
             [60.0, 15.0], [60.0, 35.0]
         ]
@@ -388,7 +434,7 @@ def train(use_web=False):
                 state1 = get_state(env, 1, i)
                 if i == 0:
                     probs1 = net1_goalie(state1)
-                    target_x, target_y = 5.0, env.puck_pos[1]
+                    target_x, target_y = 12.0, env.puck_pos[1]
                 else:
                     probs1 = net1_skater(state1)
                     if i in [1, 2]:
@@ -404,15 +450,16 @@ def train(use_web=False):
                 if i == 0:
                     loss1_g = loss1_g - torch.log(probs1[exp_a1] + 1e-8)
                 else:
-                    loss1_s = loss1_s - torch.log(probs1[exp_a1] + 1e-8)
-                    if i in [1, 2] and env.p1_pos[i][0] < 50.0:
-                        loss1_s -= 0.1
+                    l = -torch.log(probs1[exp_a1] + 1e-8)
+                    if i in [1, 2] and env.p1_pos[i][0] > 50.0:
+                        l = l * 5.0
+                    loss1_s = loss1_s + l
                     
                 # Team 2
                 state2 = get_state(env, 2, i)
                 if i == 0:
                     probs2 = net2_goalie(state2)
-                    target_x, target_y = 95.0, env.puck_pos[1]
+                    target_x, target_y = 88.0, env.puck_pos[1]
                 else:
                     probs2 = net2_skater(state2)
                     if i in [1, 2]:
@@ -428,9 +475,10 @@ def train(use_web=False):
                 if i == 0:
                     loss2_g = loss2_g - torch.log(probs2[exp_a2] + 1e-8)
                 else:
-                    loss2_s = loss2_s - torch.log(probs2[exp_a2] + 1e-8)
-                    if i in [1, 2] and env.p2_pos[i][0] > 50.0:
-                        loss2_s -= 0.1
+                    l = -torch.log(probs2[exp_a2] + 1e-8)
+                    if i in [1, 2] and env.p2_pos[i][0] < 50.0:
+                        l = l * 5.0
+                    loss2_s = loss2_s + l
 
             opt1_skater.zero_grad()
             if type(loss1_s) != int:
