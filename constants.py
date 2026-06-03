@@ -49,8 +49,8 @@ CONSTANTS = {
 
     # Network
     "NET_INPUT": 50,
-    "NET_HIDDEN1": 50,
-    "NET_HIDDEN2": 64,
+    "NET_HIDDEN1": 8,
+    "NET_HIDDEN2": 8,
     "NET_OUT_MOVE": 5,
     "NET_OUT_STICK": 3,
 
