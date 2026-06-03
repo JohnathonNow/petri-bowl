@@ -1,3 +1,4 @@
+import math
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -71,6 +72,15 @@ HTML_PAGE = """
                 ctx.arc(pos[0] * scaleX, pos[1] * scaleY, 5, 0, Math.PI * 2);
                 ctx.fillStyle = idx === 0 ? 'darkblue' : 'blue'; // Goalie is dark blue
                 ctx.fill();
+
+                // Draw stick
+                const angle = state.p1_stick_angle[idx];
+                ctx.beginPath();
+                ctx.moveTo(pos[0] * scaleX, pos[1] * scaleY);
+                ctx.lineTo((pos[0] + Math.cos(angle) * 8.0) * scaleX, (pos[1] + Math.sin(angle) * 8.0) * scaleY);
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 2;
+                ctx.stroke();
             });
 
             // Draw team 2
@@ -79,6 +89,15 @@ HTML_PAGE = """
                 ctx.arc(pos[0] * scaleX, pos[1] * scaleY, 5, 0, Math.PI * 2);
                 ctx.fillStyle = idx === 0 ? 'darkred' : 'red'; // Goalie is dark red
                 ctx.fill();
+
+                // Draw stick
+                const angle = state.p2_stick_angle[idx];
+                ctx.beginPath();
+                ctx.moveTo(pos[0] * scaleX, pos[1] * scaleY);
+                ctx.lineTo((pos[0] + Math.cos(angle) * 8.0) * scaleX, (pos[1] + Math.sin(angle) * 8.0) * scaleY);
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 2;
+                ctx.stroke();
             });
 
             // Draw puck
@@ -125,6 +144,8 @@ class HockeyHTTPRequestHandler(BaseHTTPRequestHandler):
                 state = {
                     "p1_pos": global_env.p1_pos,
                     "p2_pos": global_env.p2_pos,
+                    "p1_stick_angle": global_env.p1_stick_angle,
+                    "p2_stick_angle": global_env.p2_stick_angle,
                     "puck_pos": global_env.puck_pos,
                     "score": global_env.score
                 }
@@ -147,16 +168,18 @@ def run_server():
 class PlayerNet(nn.Module):
     def __init__(self):
         super(PlayerNet, self).__init__()
-        # Input: player x, player y, puck x, puck y, 11 other players' x, y
-        self.fc1 = nn.Linear(26, 26)
-        self.fc2 = nn.Linear(26, 64)
-        self.fc3 = nn.Linear(64, 5)
+        # Input: 4 (my pos, puck pos) + 2 (my stick dir) + 11*2 (other pos) + 11*2 (other stick dirs) = 50
+        self.fc1 = nn.Linear(50, 50)
+        self.fc2 = nn.Linear(50, 64)
+        self.fc_move = nn.Linear(64, 5)
+        self.fc_stick = nn.Linear(64, 3)
 
     def forward(self, x):
         x = torch.relu(self.fc1(x))
         x = self.fc2(x)
-        x = self.fc3(x)
-        return torch.softmax(x, dim=-1)
+        move_logits = self.fc_move(x)
+        stick_logits = self.fc_stick(x)
+        return torch.softmax(move_logits, dim=-1), torch.softmax(stick_logits, dim=-1)
 
 class HockeyEnv:
     def __init__(self):
@@ -174,13 +197,18 @@ class HockeyEnv:
 
         # actions: 0=up, 1=down, 2=left, 3=right, 4=stay
         speed = 0.2
+        rot_speed = 0.2
 
         # move p1
         for i in range(len(self.p1_pos)):
-            if actions1[i] == 0: self.p1_vel[i][1] -= speed
-            elif actions1[i] == 1: self.p1_vel[i][1] += speed
-            elif actions1[i] == 2: self.p1_vel[i][0] -= speed
-            elif actions1[i] == 3: self.p1_vel[i][0] += speed
+            move_action, stick_action = actions1[i]
+            if move_action == 0: self.p1_vel[i][1] -= speed
+            elif move_action == 1: self.p1_vel[i][1] += speed
+            elif move_action == 2: self.p1_vel[i][0] -= speed
+            elif move_action == 3: self.p1_vel[i][0] += speed
+
+            if stick_action == 0: self.p1_stick_angle[i] -= rot_speed
+            elif stick_action == 1: self.p1_stick_angle[i] += rot_speed
             
             self.p1_vel[i][0] *= 0.90
             self.p1_vel[i][1] *= 0.90
@@ -192,10 +220,14 @@ class HockeyEnv:
 
         # move p2
         for i in range(len(self.p2_pos)):
-            if actions2[i] == 0: self.p2_vel[i][1] -= speed
-            elif actions2[i] == 1: self.p2_vel[i][1] += speed
-            elif actions2[i] == 2: self.p2_vel[i][0] -= speed
-            elif actions2[i] == 3: self.p2_vel[i][0] += speed
+            move_action, stick_action = actions2[i]
+            if move_action == 0: self.p2_vel[i][1] -= speed
+            elif move_action == 1: self.p2_vel[i][1] += speed
+            elif move_action == 2: self.p2_vel[i][0] -= speed
+            elif move_action == 3: self.p2_vel[i][0] += speed
+
+            if stick_action == 0: self.p2_stick_angle[i] -= rot_speed
+            elif stick_action == 1: self.p2_stick_angle[i] += rot_speed
             
             self.p2_vel[i][0] *= 0.90
             self.p2_vel[i][1] *= 0.90
@@ -244,12 +276,40 @@ class HockeyEnv:
         self.p2_pos[0][0] = max(80.0, min(90.0, self.p2_pos[0][0]))
         self.p2_pos[0][1] = max(10.0, min(40.0, self.p2_pos[0][1]))
 
-        # Player-puck collisions
-        def check_collision(p_pos):
-            dx = self.puck_pos[0] - p_pos[0]
-            dy = self.puck_pos[1] - p_pos[1]
+        # Player-stick-puck collisions
+        def check_stick_collision(p_pos, p_angle):
+            # Stick modeled as line segment starting at p_pos of length 8
+            stick_length = 8.0
+            puck_x, puck_y = self.puck_pos
+            px, py = p_pos
+
+            # Stick endpoint
+            ex = px + math.cos(p_angle) * stick_length
+            ey = py + math.sin(p_angle) * stick_length
+
+            # Vector from start to end
+            sx, sy = ex - px, ey - py
+            # Vector from start to puck
+            px_v, py_v = puck_x - px, puck_y - py
+
+            # Project puck onto stick line
+            stick_len_sq = sx**2 + sy**2
+            if stick_len_sq == 0:
+                t = 0
+            else:
+                t = max(0, min(1, (px_v * sx + py_v * sy) / stick_len_sq))
+
+            # Closest point on stick
+            cx = px + t * sx
+            cy = py + t * sy
+
+            # Distance from puck to closest point
+            dx = puck_x - cx
+            dy = puck_y - cy
             dist = (dx**2 + dy**2)**0.5
-            if dist < 5.0: # collision radius
+
+            # Threshold for collision (e.g. puck radius + stick width)
+            if dist < 2.0:
                 if dist == 0:
                     self.puck_vel[0] += random.choice([-1.0, 1.0])
                     self.puck_vel[1] += random.choice([-1.0, 1.0])
@@ -257,10 +317,10 @@ class HockeyEnv:
                     self.puck_vel[0] += (dx/dist) * 2.0
                     self.puck_vel[1] += (dy/dist) * 2.0
 
-        for p in self.p1_pos:
-            check_collision(p)
-        for p in self.p2_pos:
-            check_collision(p)
+        for p, angle in zip(self.p1_pos, self.p1_stick_angle):
+            check_stick_collision(p, angle)
+        for p, angle in zip(self.p2_pos, self.p2_stick_angle):
+            check_stick_collision(p, angle)
 
         #print(self.p1_pos, self.p2_pos, self.puck_pos)
         done = self.steps >= 20000 #0
@@ -366,20 +426,26 @@ class HockeyEnv:
         ]
         self.p1_vel = [[0.0, 0.0] for _ in range(6)]
         self.p2_vel = [[0.0, 0.0] for _ in range(6)]
+        self.p1_stick_angle = [0.0 for _ in range(6)]
+        self.p2_stick_angle = [math.pi for _ in range(6)]
         self.puck_pos = [50.0, 25.0]
         self.puck_vel = [0.0, 0.0]
 
 def get_state(env, team, player_idx):
     if team == 1:
         my_pos = env.p1_pos[player_idx]
+        my_angle = env.p1_stick_angle[player_idx]
         other_players = [env.p1_pos[i] for i in range(len(env.p1_pos)) if i != player_idx] + env.p2_pos
+        other_angles = [env.p1_stick_angle[i] for i in range(len(env.p1_stick_angle)) if i != player_idx] + env.p2_stick_angle
     else:
         my_pos = env.p2_pos[player_idx]
+        my_angle = env.p2_stick_angle[player_idx]
         other_players = [env.p2_pos[i] for i in range(len(env.p2_pos)) if i != player_idx] + env.p1_pos
+        other_angles = [env.p2_stick_angle[i] for i in range(len(env.p2_stick_angle)) if i != player_idx] + env.p1_stick_angle
 
-    state = [my_pos[0]/100.0, my_pos[1]/50.0, env.puck_pos[0]/100.0, env.puck_pos[1]/50.0]
-    for p in other_players:
-        state.extend([p[0]/100.0, p[1]/50.0])
+    state = [my_pos[0]/100.0, my_pos[1]/50.0, env.puck_pos[0]/100.0, env.puck_pos[1]/50.0, math.cos(my_angle), math.sin(my_angle)]
+    for p, a in zip(other_players, other_angles):
+        state.extend([p[0]/100.0, p[1]/50.0, math.cos(a), math.sin(a)])
     
     return torch.tensor(state, dtype=torch.float32)
 
@@ -406,17 +472,21 @@ class Agent:
         self.is_goalie = is_goalie
 
     def get_action(self, state):
-        probs = self.net(state)
-        m = torch.distributions.Categorical(probs)
-        action = m.sample()
-        return action.item(), m.log_prob(action)
+        move_probs, stick_probs = self.net(state)
+        m_move = torch.distributions.Categorical(move_probs)
+        m_stick = torch.distributions.Categorical(stick_probs)
+        move_action = m_move.sample()
+        stick_action = m_stick.sample()
+        return (move_action.item(), stick_action.item()), m_move.log_prob(move_action) + m_stick.log_prob(stick_action)
 
     def get_action_pretrain(self, state, expert_action):
-        probs = self.net(state)
-        m = torch.distributions.Categorical(probs)
-        action = m.sample()
-        loss = -torch.log(probs[expert_action] + 1e-8)
-        return action.item(), loss
+        move_probs, stick_probs = self.net(state)
+        m_move = torch.distributions.Categorical(move_probs)
+        m_stick = torch.distributions.Categorical(stick_probs)
+        move_action = m_move.sample()
+        stick_action = m_stick.sample()
+        loss = -torch.log(move_probs[expert_action] + 1e-8) - torch.log(stick_probs[2] + 1e-8)
+        return (move_action.item(), stick_action.item()), loss
 
 class Team:
     def __init__(self):
