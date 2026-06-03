@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hockey Training</title>
+    <style>
+        canvas {
+            border: 2px solid black;
+            background-color: #e0f7fa;
+        }
+    </style>
+</head>
+<body>
+    <h1>Hockey Training Watcher</h1>
+    <h2 id="score">Score: 0 - 0</h2>
+    <canvas id="gameCanvas"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElem = document.getElementById('score');
+
+        let constants = null;
+        let scaleX = 1;
+        let scaleY = 1;
+
+        function drawGame(state) {
+            if (!constants) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw rounded rink boundary
+            const r = constants.BOUNDS_RADIUS * scaleX; // radius
+            ctx.beginPath();
+            ctx.moveTo(r, 0);
+            ctx.lineTo(canvas.width - r, 0);
+            ctx.arcTo(canvas.width, 0, canvas.width, r, r);
+            ctx.lineTo(canvas.width, canvas.height - r);
+            ctx.arcTo(canvas.width, canvas.height, canvas.width - r, canvas.height, r);
+            ctx.lineTo(r, canvas.height);
+            ctx.arcTo(0, canvas.height, 0, canvas.height - r, r);
+            ctx.lineTo(0, r);
+            ctx.arcTo(0, 0, r, 0, r);
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Draw center line
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 0);
+            ctx.lineTo(canvas.width / 2, canvas.height);
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Draw goals
+            ctx.fillStyle = 'black';
+            ctx.fillRect(constants.GOAL_X_1 * scaleX - 5, constants.GOAL_Y_MIN * scaleY, 5, (constants.GOAL_Y_MAX - constants.GOAL_Y_MIN) * scaleY);
+            ctx.fillRect(constants.GOAL_X_2 * scaleX, constants.GOAL_Y_MIN * scaleY, 5, (constants.GOAL_Y_MAX - constants.GOAL_Y_MIN) * scaleY);
+
+            // Draw team 1
+            if (state.p1_pos) {
+                state.p1_pos.forEach((pos, idx) => {
+                    ctx.beginPath();
+                    ctx.arc(pos[0] * scaleX, pos[1] * scaleY, 5, 0, Math.PI * 2);
+                    ctx.fillStyle = idx === 0 ? 'darkblue' : 'blue'; // Goalie is dark blue
+                    ctx.fill();
+
+                    // Draw stick
+                    const angle = state.p1_stick_angle[idx];
+                    ctx.beginPath();
+                    ctx.moveTo(pos[0] * scaleX, pos[1] * scaleY);
+                    ctx.lineTo((pos[0] + Math.cos(angle) * constants.STICK_LENGTH) * scaleX, (pos[1] + Math.sin(angle) * constants.STICK_LENGTH) * scaleY);
+                    ctx.strokeStyle = 'black';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                });
+            }
+
+            // Draw team 2
+            if (state.p2_pos) {
+                state.p2_pos.forEach((pos, idx) => {
+                    ctx.beginPath();
+                    ctx.arc(pos[0] * scaleX, pos[1] * scaleY, 5, 0, Math.PI * 2);
+                    ctx.fillStyle = idx === 0 ? 'darkred' : 'red'; // Goalie is dark red
+                    ctx.fill();
+
+                    // Draw stick
+                    const angle = state.p2_stick_angle[idx];
+                    ctx.beginPath();
+                    ctx.moveTo(pos[0] * scaleX, pos[1] * scaleY);
+                    ctx.lineTo((pos[0] + Math.cos(angle) * constants.STICK_LENGTH) * scaleX, (pos[1] + Math.sin(angle) * constants.STICK_LENGTH) * scaleY);
+                    ctx.strokeStyle = 'black';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                });
+            }
+
+            // Draw puck
+            if (state.puck_pos) {
+                ctx.beginPath();
+                ctx.arc(state.puck_pos[0] * scaleX, state.puck_pos[1] * scaleY, 4, 0, Math.PI * 2);
+                ctx.fillStyle = 'black';
+                ctx.fill();
+            }
+
+            if (state.score) {
+                scoreElem.innerText = `Score: ${state.score[0]} - ${state.score[1]}`;
+            }
+        }
+
+        async function fetchConstants() {
+            try {
+                const response = await fetch('/constants');
+                constants = await response.json();
+                canvas.width = constants.CANVAS_WIDTH;
+                canvas.height = constants.CANVAS_HEIGHT;
+                scaleX = canvas.width / constants.WIDTH;
+                scaleY = canvas.height / constants.HEIGHT;
+
+                // Once constants are loaded, start fetching state
+                fetchState();
+            } catch (e) {
+                console.error("Error fetching constants:", e);
+                setTimeout(fetchConstants, 1000); // Retry after 1s
+            }
+        }
+
+        async function fetchState() {
+            try {
+                const response = await fetch('/state');
+                const state = await response.json();
+                drawGame(state);
+            } catch (e) {
+                console.error("Error fetching state:", e);
+            }
+            setTimeout(fetchState, 50);
+        }
+
+        // Start by fetching constants
+        fetchConstants();
+    </script>
+</body>
+</html>
