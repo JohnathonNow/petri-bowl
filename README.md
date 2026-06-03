@@ -1,9 +1,24 @@
-NOTE: This project is in the ideation phase and currently there's no code here.
+NOTE: This project is in the ideation phase and currently there's very little code here.
 
 Basically, the general idea is to make a game where players draw simple neural networks
 using the inputs below for simple amoeba to follow. Each amoeba has breedable traits.
-The amoeba are then trained to play a simplified version of American Football.
+The amoeba are then trained to play a simplified version of different sports - currently Ice Hockey.
 
+
+
+<details>
+<summary>
+	Ice Hockey
+</summary>
+	Players receive the position of the puck as well as every player,
+	and output which direction (if any) to accelerate in, and which direction to rotate their sticks.
+
+</details>
+
+<details>
+<summary>
+	American Football
+</summary>
 Game is played on a 256x128 grid
 Game is 60 minutes
 Players can occupy tenths of a grid unit
@@ -39,3 +54,4 @@ Coach Output:
 	Play call number [int]	
 
 
+</details>
