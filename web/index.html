@@ -1,126 +1,250 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Hockey Training</title>
+    <title>Hockey Training 3D</title>
     <style>
-        canvas {
-            border: 2px solid black;
-            background-color: #e0f7fa;
+        body { margin: 0; overflow: hidden; background-color: #e0f7fa; }
+        canvas { display: block; }
+        #scoreContainer {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            z-index: 100;
+            pointer-events: none;
+        }
+        h1, h2 {
+            margin: 0;
+            color: #333;
+            font-family: sans-serif;
+            text-shadow: 1px 1px 2px white;
         }
     </style>
+    <!-- Include Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
-    <h1>Hockey Training Watcher</h1>
-    <h2 id="score">Score: 0 - 0</h2>
-    <canvas id="gameCanvas"></canvas>
+    <div id="scoreContainer">
+        <h1>Hockey Training Watcher</h1>
+        <h2 id="score">Score: 0 - 0</h2>
+    </div>
+
     <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
         const scoreElem = document.getElementById('score');
 
+        // Setup Three.js scene
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xe0f7fa);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        directionalLight.position.set(50, 100, 50);
+        scene.add(directionalLight);
+
         let constants = null;
-        let scaleX = 1;
-        let scaleY = 1;
+
+        // Materials
+        const team1Color = 0x0000ff;
+        const team1GoalieColor = 0x00008b; // dark blue
+        const team2Color = 0xff0000;
+        const team2GoalieColor = 0x8b0000; // dark red
+
+        const team1Mat = new THREE.MeshStandardMaterial({ color: team1Color });
+        const team1GoalieMat = new THREE.MeshStandardMaterial({ color: team1GoalieColor });
+        const team2Mat = new THREE.MeshStandardMaterial({ color: team2Color });
+        const team2GoalieMat = new THREE.MeshStandardMaterial({ color: team2GoalieColor });
+        const stickMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+        const puckMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
+        const goalMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+
+        // Objects
+        let p1Objects = [];
+        let p2Objects = [];
+        let p1Sticks = [];
+        let p2Sticks = [];
+        let puckMesh = null;
+
+        function createPlayer(material) {
+            const group = new THREE.Group();
+
+            // Body (cylinder)
+            const bodyGeo = new THREE.CylinderGeometry(0.8, 0.8, 4, 16);
+            const body = new THREE.Mesh(bodyGeo, material);
+            body.position.y = 2;
+            group.add(body);
+
+            // Head (sphere)
+            const headGeo = new THREE.SphereGeometry(1, 16, 16);
+            const head = new THREE.Mesh(headGeo, material);
+            head.position.y = 4.5;
+            group.add(head);
+
+            return group;
+        }
+
+        function createStick(stickLength) {
+            const group = new THREE.Group();
+
+            // Shaft along X axis
+            const shaftGeo = new THREE.BoxGeometry(stickLength, 0.2, 0.2);
+            const shaft = new THREE.Mesh(shaftGeo, stickMat);
+            shaft.position.set(stickLength / 2, 0.5, 0);
+            group.add(shaft);
+
+            // Blade
+            const bladeGeo = new THREE.BoxGeometry(0.8, 0.6, 0.2);
+            const blade = new THREE.Mesh(bladeGeo, stickMat);
+            blade.position.set(stickLength, 0.2, 0);
+            // Angle the blade
+            blade.rotation.y = -Math.PI / 4;
+            group.add(blade);
+
+            return group;
+        }
+
+        function initScene() {
+            // Rink
+            const rinkShape = new THREE.Shape();
+            const w = constants.WIDTH;
+            const h = constants.HEIGHT;
+            const r = constants.BOUNDS_RADIUS;
+
+            rinkShape.moveTo(r, 0);
+            rinkShape.lineTo(w - r, 0);
+            rinkShape.absarc(w - r, r, r, -Math.PI/2, 0, false);
+            rinkShape.lineTo(w, h - r);
+            rinkShape.absarc(w - r, h - r, r, 0, Math.PI/2, false);
+            rinkShape.lineTo(r, h);
+            rinkShape.absarc(r, h - r, r, Math.PI/2, Math.PI, false);
+            rinkShape.lineTo(0, r);
+            rinkShape.absarc(r, r, r, Math.PI, Math.PI*1.5, false);
+
+            const rinkGeo = new THREE.ShapeGeometry(rinkShape);
+            const rinkMat = new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+            const rink = new THREE.Mesh(rinkGeo, rinkMat);
+            rink.rotation.x = -Math.PI / 2;
+            // Center the rink roughly around 0,0
+            rink.position.set(-w/2, 0, h/2);
+            scene.add(rink);
+
+            // Lines
+            const lineMat = new THREE.LineBasicMaterial({ color: 0xff0000 });
+            const points = [];
+            points.push(new THREE.Vector3(0, 0.01, -h/2));
+            points.push(new THREE.Vector3(0, 0.01, h/2));
+            const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+            const centerLine = new THREE.Line(lineGeo, lineMat);
+            scene.add(centerLine);
+
+            // Goals
+            const goalW = 2;
+            const goalH = 4;
+            const goalD = constants.GOAL_Y_MAX - constants.GOAL_Y_MIN;
+
+            const goalGeo = new THREE.BoxGeometry(goalW, goalH, goalD);
+            const goal1 = new THREE.Mesh(goalGeo, goalMat);
+            goal1.position.set(constants.GOAL_X_1 - w/2, goalH/2, (constants.GOAL_Y_MIN + constants.GOAL_Y_MAX)/2 - h/2);
+            scene.add(goal1);
+
+            const goal2 = new THREE.Mesh(goalGeo, goalMat);
+            goal2.position.set(constants.GOAL_X_2 - w/2, goalH/2, (constants.GOAL_Y_MIN + constants.GOAL_Y_MAX)/2 - h/2);
+            scene.add(goal2);
+
+            // Camera positioning
+            camera.position.set(0, 60, 40);
+            camera.lookAt(0, 0, 0);
+
+            // Puck
+            const puckGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.4, 16);
+            puckMesh = new THREE.Mesh(puckGeo, puckMat);
+            puckMesh.position.y = 0.2;
+            scene.add(puckMesh);
+        }
 
         function drawGame(state) {
-            if (!constants) return;
+            if (!constants || !state) return;
+            const w = constants.WIDTH;
+            const h = constants.HEIGHT;
 
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Draw rounded rink boundary
-            const r = constants.BOUNDS_RADIUS * scaleX; // radius
-            ctx.beginPath();
-            ctx.moveTo(r, 0);
-            ctx.lineTo(canvas.width - r, 0);
-            ctx.arcTo(canvas.width, 0, canvas.width, r, r);
-            ctx.lineTo(canvas.width, canvas.height - r);
-            ctx.arcTo(canvas.width, canvas.height, canvas.width - r, canvas.height, r);
-            ctx.lineTo(r, canvas.height);
-            ctx.arcTo(0, canvas.height, 0, canvas.height - r, r);
-            ctx.lineTo(0, r);
-            ctx.arcTo(0, 0, r, 0, r);
-            ctx.strokeStyle = 'black';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-
-            // Draw center line
-            ctx.beginPath();
-            ctx.moveTo(canvas.width / 2, 0);
-            ctx.lineTo(canvas.width / 2, canvas.height);
-            ctx.strokeStyle = 'red';
-            ctx.lineWidth = 1;
-            ctx.stroke();
-
-            // Draw goals
-            ctx.fillStyle = 'black';
-            ctx.fillRect(constants.GOAL_X_1 * scaleX - 5, constants.GOAL_Y_MIN * scaleY, 5, (constants.GOAL_Y_MAX - constants.GOAL_Y_MIN) * scaleY);
-            ctx.fillRect(constants.GOAL_X_2 * scaleX, constants.GOAL_Y_MIN * scaleY, 5, (constants.GOAL_Y_MAX - constants.GOAL_Y_MIN) * scaleY);
-
-            // Draw team 1
+            // Manage p1 objects
             if (state.p1_pos) {
+                while (p1Objects.length < state.p1_pos.length) {
+                    const idx = p1Objects.length;
+                    const mat = idx === 0 ? team1GoalieMat : team1Mat;
+                    const player = createPlayer(mat);
+                    scene.add(player);
+                    p1Objects.push(player);
+
+                    const stick = createStick(constants.STICK_LENGTH);
+                    scene.add(stick);
+                    p1Sticks.push(stick);
+                }
+
                 state.p1_pos.forEach((pos, idx) => {
-                    ctx.beginPath();
-                    ctx.arc(pos[0] * scaleX, pos[1] * scaleY, 5, 0, Math.PI * 2);
-                    ctx.fillStyle = idx === 0 ? 'darkblue' : 'blue'; // Goalie is dark blue
-                    ctx.fill();
+                    const px = pos[0] - w/2;
+                    const pz = pos[1] - h/2;
+                    p1Objects[idx].position.set(px, 0, pz);
 
-                    // Draw stick
-                    const angle = state.p1_stick_angle[idx];
-                    ctx.beginPath();
-                    ctx.moveTo(pos[0] * scaleX, pos[1] * scaleY);
-                    ctx.lineTo((pos[0] + Math.cos(angle) * constants.STICK_LENGTH) * scaleX, (pos[1] + Math.sin(angle) * constants.STICK_LENGTH) * scaleY);
-                    ctx.strokeStyle = 'black';
-                    ctx.lineWidth = 2;
-                    ctx.stroke();
+                    const stickAngle = state.p1_stick_angle[idx];
+                    p1Sticks[idx].position.set(px, 0, pz);
+                    p1Sticks[idx].rotation.y = -stickAngle;
                 });
             }
 
-            // Draw team 2
+            // Manage p2 objects
             if (state.p2_pos) {
-                state.p2_pos.forEach((pos, idx) => {
-                    ctx.beginPath();
-                    ctx.arc(pos[0] * scaleX, pos[1] * scaleY, 5, 0, Math.PI * 2);
-                    ctx.fillStyle = idx === 0 ? 'darkred' : 'red'; // Goalie is dark red
-                    ctx.fill();
+                while (p2Objects.length < state.p2_pos.length) {
+                    const idx = p2Objects.length;
+                    const mat = idx === 0 ? team2GoalieMat : team2Mat;
+                    const player = createPlayer(mat);
+                    scene.add(player);
+                    p2Objects.push(player);
 
-                    // Draw stick
-                    const angle = state.p2_stick_angle[idx];
-                    ctx.beginPath();
-                    ctx.moveTo(pos[0] * scaleX, pos[1] * scaleY);
-                    ctx.lineTo((pos[0] + Math.cos(angle) * constants.STICK_LENGTH) * scaleX, (pos[1] + Math.sin(angle) * constants.STICK_LENGTH) * scaleY);
-                    ctx.strokeStyle = 'black';
-                    ctx.lineWidth = 2;
-                    ctx.stroke();
+                    const stick = createStick(constants.STICK_LENGTH);
+                    scene.add(stick);
+                    p2Sticks.push(stick);
+                }
+
+                state.p2_pos.forEach((pos, idx) => {
+                    const px = pos[0] - w/2;
+                    const pz = pos[1] - h/2;
+                    p2Objects[idx].position.set(px, 0, pz);
+
+                    const stickAngle = state.p2_stick_angle[idx];
+                    p2Sticks[idx].position.set(px, 0, pz);
+                    p2Sticks[idx].rotation.y = -stickAngle;
                 });
             }
 
-            // Draw puck
-            if (state.puck_pos) {
-                ctx.beginPath();
-                ctx.arc(state.puck_pos[0] * scaleX, state.puck_pos[1] * scaleY, 4, 0, Math.PI * 2);
-                ctx.fillStyle = 'black';
-                ctx.fill();
+            if (state.puck_pos && puckMesh) {
+                puckMesh.position.x = state.puck_pos[0] - w/2;
+                puckMesh.position.z = state.puck_pos[1] - h/2;
             }
 
             if (state.score) {
                 scoreElem.innerText = `Score: ${state.score[0]} - ${state.score[1]}`;
             }
+
+            renderer.render(scene, camera);
         }
 
         async function fetchConstants() {
             try {
                 const response = await fetch('/constants');
                 constants = await response.json();
-                canvas.width = constants.CANVAS_WIDTH;
-                canvas.height = constants.CANVAS_HEIGHT;
-                scaleX = canvas.width / constants.WIDTH;
-                scaleY = canvas.height / constants.HEIGHT;
-
-                // Once constants are loaded, start fetching state
+                initScene();
                 fetchState();
             } catch (e) {
                 console.error("Error fetching constants:", e);
-                setTimeout(fetchConstants, 1000); // Retry after 1s
+                setTimeout(fetchConstants, 1000);
             }
         }
 
@@ -135,7 +259,12 @@
             setTimeout(fetchState, 50);
         }
 
-        // Start by fetching constants
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
         fetchConstants();
     </script>
 </body>
