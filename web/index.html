@@ -110,6 +110,60 @@
             return group;
         }
 
+        function createGoalFrame(w, h, d, material) {
+            const group = new THREE.Group();
+            const thickness = 0.4;
+
+            // Front posts (facing +x)
+            const postGeo = new THREE.BoxGeometry(thickness, h, thickness);
+            const post1 = new THREE.Mesh(postGeo, material);
+            post1.position.set(w/2 - thickness/2, h/2, d/2 - thickness/2);
+            group.add(post1);
+
+            const post2 = new THREE.Mesh(postGeo, material);
+            post2.position.set(w/2 - thickness/2, h/2, -d/2 + thickness/2);
+            group.add(post2);
+
+            // Crossbar
+            const crossbarGeo = new THREE.BoxGeometry(thickness, thickness, d);
+            const crossbar = new THREE.Mesh(crossbarGeo, material);
+            crossbar.position.set(w/2 - thickness/2, h - thickness/2, 0);
+            group.add(crossbar);
+
+            // Base sides (bottom)
+            const baseSideGeo = new THREE.BoxGeometry(w, thickness, thickness);
+            const base1 = new THREE.Mesh(baseSideGeo, material);
+            base1.position.set(0, thickness/2, d/2 - thickness/2);
+            group.add(base1);
+
+            const base2 = new THREE.Mesh(baseSideGeo, material);
+            base2.position.set(0, thickness/2, -d/2 + thickness/2);
+            group.add(base2);
+
+            // Base back
+            const baseBackGeo = new THREE.BoxGeometry(thickness, thickness, d - thickness*2);
+            const base3 = new THREE.Mesh(baseBackGeo, material);
+            base3.position.set(-w/2 + thickness/2, thickness/2, 0);
+            group.add(base3);
+
+            // Diagonal supports (from back bottom corner to front top corner)
+            const diagLen = Math.sqrt(w*w + h*h);
+            const diagGeo = new THREE.BoxGeometry(diagLen, thickness, thickness);
+            const angle = Math.atan2(h, w);
+
+            const diag1 = new THREE.Mesh(diagGeo, material);
+            diag1.rotation.z = angle;
+            diag1.position.set(0, h/2, d/2 - thickness/2);
+            group.add(diag1);
+
+            const diag2 = new THREE.Mesh(diagGeo, material);
+            diag2.rotation.z = angle;
+            diag2.position.set(0, h/2, -d/2 + thickness/2);
+            group.add(diag2);
+
+            return group;
+        }
+
         function initScene() {
             // Rink
             const rinkShape = new THREE.Shape();
@@ -145,17 +199,20 @@
             scene.add(centerLine);
 
             // Goals
-            const goalW = 2;
+            const goalW = 4;
             const goalH = 4;
             const goalD = constants.GOAL_Y_MAX - constants.GOAL_Y_MIN;
+            const goalColorMat = new THREE.MeshStandardMaterial({ color: 0xcc0000 }); // red goal frame
 
-            const goalGeo = new THREE.BoxGeometry(goalW, goalH, goalD);
-            const goal1 = new THREE.Mesh(goalGeo, goalMat);
-            goal1.position.set(constants.GOAL_X_1 - w/2, goalH/2, (constants.GOAL_Y_MIN + constants.GOAL_Y_MAX)/2 - h/2);
+            const goal1 = createGoalFrame(goalW, goalH, goalD, goalColorMat);
+            // Face right
+            goal1.position.set(constants.GOAL_X_1 - w/2 - goalW/2, 0, (constants.GOAL_Y_MIN + constants.GOAL_Y_MAX)/2 - h/2);
             scene.add(goal1);
 
-            const goal2 = new THREE.Mesh(goalGeo, goalMat);
-            goal2.position.set(constants.GOAL_X_2 - w/2, goalH/2, (constants.GOAL_Y_MIN + constants.GOAL_Y_MAX)/2 - h/2);
+            const goal2 = createGoalFrame(goalW, goalH, goalD, goalColorMat);
+            // Face left (rotate 180 degrees)
+            goal2.rotation.y = Math.PI;
+            goal2.position.set(constants.GOAL_X_2 - w/2 + goalW/2, 0, (constants.GOAL_Y_MIN + constants.GOAL_Y_MAX)/2 - h/2);
             scene.add(goal2);
 
             // Camera positioning
