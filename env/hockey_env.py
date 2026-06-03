@@ -1,5 +1,7 @@
 import math
 import random
+import time
+import copy
 from constants import CONSTANTS
 
 class HockeyEnv:
@@ -11,10 +13,25 @@ class HockeyEnv:
     def reset(self):
         self.score = [0, 0] # Team 1, Team 2
         self.steps = 0
+        self.history = []
+        self.is_replay = False
         self._reset_positions()
 
     def step(self, actions1, actions2):
         self.steps += 1
+
+        if getattr(self, 'use_web', False):
+            state_snapshot = {
+                "p1_pos": copy.deepcopy(self.p1_pos),
+                "p2_pos": copy.deepcopy(self.p2_pos),
+                "p1_stick_angle": copy.deepcopy(self.p1_stick_angle),
+                "p2_stick_angle": copy.deepcopy(self.p2_stick_angle),
+                "puck_pos": copy.deepcopy(self.puck_pos),
+                "score": copy.deepcopy(self.score)
+            }
+            self.history.append(state_snapshot)
+            if len(self.history) > 100:
+                self.history.pop(0)
 
         # actions: 0=up, 1=down, 2=left, 3=right, 4=stay
         speed = CONSTANTS["SPEED"]
@@ -77,15 +94,29 @@ class HockeyEnv:
         if old_puck_x > CONSTANTS["GOAL_X_1"] and self.puck_pos[0] <= CONSTANTS["GOAL_X_1"]:
             if goal_y_min <= self.puck_pos[1] <= goal_y_max:
                 self.score[1] += 1
-                self._reset_positions()
                 scored_goal = True
         elif old_puck_x < CONSTANTS["GOAL_X_2"] and self.puck_pos[0] >= CONSTANTS["GOAL_X_2"]:
             if goal_y_min <= self.puck_pos[1] <= goal_y_max:
                 self.score[0] += 1
-                self._reset_positions()
                 scored_goal = True
 
-        if not scored_goal:
+        if scored_goal:
+            if getattr(self, 'use_web', False):
+                self.is_replay = True
+                actual_score = copy.deepcopy(self.score)
+                for state_snapshot in self.history:
+                    self.p1_pos = state_snapshot["p1_pos"]
+                    self.p2_pos = state_snapshot["p2_pos"]
+                    self.p1_stick_angle = state_snapshot["p1_stick_angle"]
+                    self.p2_stick_angle = state_snapshot["p2_stick_angle"]
+                    self.puck_pos = state_snapshot["puck_pos"]
+                    self.score = state_snapshot["score"]
+                    time.sleep(0.05)
+                self.is_replay = False
+                self.score = actual_score
+                self.history = []
+            self._reset_positions()
+        else:
             self._resolve_net_collision(self.puck_pos, self.puck_vel, True)
 
         # Goalie constraints

@@ -43,12 +43,26 @@ class HockeyHTTPRequestHandler(BaseHTTPRequestHandler):
                     "p1_stick_angle": global_env.p1_stick_angle,
                     "p2_stick_angle": global_env.p2_stick_angle,
                     "puck_pos": global_env.puck_pos,
-                    "score": global_env.score
+                    "score": global_env.score,
+                    "is_replay": getattr(global_env, 'is_replay', False)
                 }
             else:
                 state = {}
 
             self.wfile.write(json.dumps(state).encode())
+
+        elif self.path == '/goal_horn.mp3':
+            try:
+                audio_path = os.path.join(os.path.dirname(__file__), 'goal_horn.mp3')
+                with open(audio_path, 'rb') as f:
+                    audio_content = f.read()
+                self.send_response(200)
+                self.send_header('Content-type', 'audio/mpeg')
+                self.end_headers()
+                self.wfile.write(audio_content)
+            except FileNotFoundError:
+                self.send_response(404)
+                self.end_headers()
         else:
             self.send_response(404)
             self.end_headers()

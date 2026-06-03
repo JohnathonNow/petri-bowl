@@ -13,6 +13,7 @@ def train(use_web=False):
     team2 = Team()
 
     env = HockeyEnv()
+    env.use_web = use_web
     set_global_env(env)
 
     if use_web:
