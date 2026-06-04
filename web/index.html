@@ -158,6 +158,8 @@
 
             // Blade
             const bladeGeo = new THREE.BoxGeometry(0.8, 0.3, 0.1);
+            // Shift the geometry so its origin is at the heel (end of the blade)
+            bladeGeo.translate(0.4, 0, 0);
             const blade = new THREE.Mesh(bladeGeo, stickMat);
             // Positioned at the end of the shaft
             blade.position.set(stickLength, -dropY, 0);
@@ -345,6 +347,14 @@
 
             if (state.score) {
                 scoreElem.innerText = `Score: ${state.score[0]} - ${state.score[1]}`;
+                if (state.score[0] > currentScore[0]) {
+                    t1CelebrateEnd = Date.now() + 3000;
+                }
+                if (state.score[1] > currentScore[1]) {
+                    t2CelebrateEnd = Date.now() + 3000;
+                }
+                currentScore[0] = state.score[0];
+                currentScore[1] = state.score[1];
             }
 
             if (state.is_replay) {
@@ -355,14 +365,6 @@
             } else {
                 if (wasReplay) {
                     replayText.style.display = 'none';
-                    if (state.score[0] > currentScore[0]) {
-                        t1CelebrateEnd = Date.now() + 3000;
-                    }
-                    if (state.score[1] > currentScore[1]) {
-                        t2CelebrateEnd = Date.now() + 3000;
-                    }
-                    currentScore[0] = state.score[0];
-                    currentScore[1] = state.score[1];
                 }
                 wasReplay = false;
             }
