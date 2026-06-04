@@ -113,6 +113,10 @@
         let p2Sticks = [];
         let puckMesh = null;
 
+        let currentScore = [0, 0];
+        let t1CelebrateEnd = 0;
+        let t2CelebrateEnd = 0;
+
         function createPlayer(material) {
             const group = new THREE.Group();
 
@@ -132,23 +136,35 @@
         }
 
         function createStick(stickLength) {
-            const group = new THREE.Group();
+            const outerGroup = new THREE.Group();
+            const pivotGroup = new THREE.Group();
 
-            // Shaft along X axis
-            const shaftGeo = new THREE.BoxGeometry(stickLength, 0.2, 0.2);
+            // Hand is roughly at y=2
+            pivotGroup.position.y = 2;
+            outerGroup.add(pivotGroup);
+            outerGroup.userData.pivot = pivotGroup;
+
+            const dropY = 1.8; // Drops from y=2 to y=0.2
+            const shaftLen = Math.sqrt(stickLength * stickLength + dropY * dropY);
+            const angleZ = Math.atan2(-dropY, stickLength);
+
+            // Shaft
+            const shaftGeo = new THREE.BoxGeometry(shaftLen, 0.15, 0.15);
             const shaft = new THREE.Mesh(shaftGeo, stickMat);
-            shaft.position.set(stickLength / 2, 0.5, 0);
-            group.add(shaft);
+            // Center of the shaft
+            shaft.position.set(stickLength / 2, -dropY / 2, 0);
+            shaft.rotation.z = angleZ;
+            pivotGroup.add(shaft);
 
             // Blade
-            const bladeGeo = new THREE.BoxGeometry(0.8, 0.6, 0.2);
+            const bladeGeo = new THREE.BoxGeometry(0.8, 0.3, 0.1);
             const blade = new THREE.Mesh(bladeGeo, stickMat);
-            blade.position.set(stickLength, 0.2, 0);
-            // Angle the blade
+            // Positioned at the end of the shaft
+            blade.position.set(stickLength, -dropY, 0);
             blade.rotation.y = -Math.PI / 4;
-            group.add(blade);
+            pivotGroup.add(blade);
 
-            return group;
+            return outerGroup;
         }
 
         function createGoalFrame(w, h, d, material) {
@@ -339,6 +355,14 @@
             } else {
                 if (wasReplay) {
                     replayText.style.display = 'none';
+                    if (state.score[0] > currentScore[0]) {
+                        t1CelebrateEnd = Date.now() + 3000;
+                    }
+                    if (state.score[1] > currentScore[1]) {
+                        t2CelebrateEnd = Date.now() + 3000;
+                    }
+                    currentScore[0] = state.score[0];
+                    currentScore[1] = state.score[1];
                 }
                 wasReplay = false;
             }
@@ -358,6 +382,35 @@
         function animate() {
             requestAnimationFrame(animate);
             if (typeof controls !== 'undefined') controls.update();
+
+            const now = Date.now();
+
+            p1Sticks.forEach((stick, idx) => {
+                if (!stick.userData.pivot) return;
+                const pivot = stick.userData.pivot;
+                let targetRotZ = 0;
+                let targetPosY = 2; // Default pivot pos
+                if (idx > 0 && now < t1CelebrateEnd) {
+                    targetRotZ = Math.PI;
+                    targetPosY = 4.5;
+                }
+                pivot.rotation.z = THREE.MathUtils.lerp(pivot.rotation.z, targetRotZ, 0.1);
+                pivot.position.y = THREE.MathUtils.lerp(pivot.position.y, targetPosY, 0.1);
+            });
+
+            p2Sticks.forEach((stick, idx) => {
+                if (!stick.userData.pivot) return;
+                const pivot = stick.userData.pivot;
+                let targetRotZ = 0;
+                let targetPosY = 2; // Default pivot pos
+                if (idx > 0 && now < t2CelebrateEnd) {
+                    targetRotZ = Math.PI;
+                    targetPosY = 4.5;
+                }
+                pivot.rotation.z = THREE.MathUtils.lerp(pivot.rotation.z, targetRotZ, 0.1);
+                pivot.position.y = THREE.MathUtils.lerp(pivot.position.y, targetPosY, 0.1);
+            });
+
             renderer.render(scene, camera);
         }
         animate();
