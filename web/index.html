@@ -1,10 +1,19 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Hockey Training 3D</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #e0f7fa; }
-        canvas { display: block; }
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #e0f7fa;
+        }
+
+        canvas {
+            display: block;
+        }
+
         #scoreContainer {
             position: absolute;
             top: 10px;
@@ -13,7 +22,9 @@
             z-index: 100;
             pointer-events: none;
         }
-        h1, h2 {
+
+        h1,
+        h2 {
             margin: 0;
             color: #333;
             font-family: sans-serif;
@@ -24,22 +35,26 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
+
 <body>
     <div id="scoreContainer">
         <h1>Hockey Training Watcher</h1>
         <h2 id="score">Score: 0 - 0</h2>
         <h2 id="replayText" style="display: none; color: red; animation: blink 1s linear infinite;">REPLAY</h2>
     </div>
-    <div id="overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; display: flex; align-items: center; justify-content: center; font-family: sans-serif; font-size: 24px; cursor: pointer; z-index: 200;">
+    <div id="overlay"
+        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; display: flex; align-items: center; justify-content: center; font-family: sans-serif; font-size: 24px; cursor: pointer; z-index: 200;">
         Click to Start Watching
     </div>
 
     <style>
         @keyframes blink {
-            50% { opacity: 0; }
+            50% {
+                opacity: 0;
+            }
         }
     </style>
-    
+
     <script>
         const scoreElem = document.getElementById('score');
         const replayText = document.getElementById('replayText');
@@ -61,7 +76,7 @@
         scene.background = new THREE.Color(0xe0f7fa);
 
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-        
+
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
@@ -76,13 +91,13 @@
         scene.add(directionalLight);
 
         let constants = null;
-        
+
         // Materials
         const team1Color = 0x0000ff;
         const team1GoalieColor = 0x00008b; // dark blue
         const team2Color = 0xff0000;
         const team2GoalieColor = 0x8b0000; // dark red
-        
+
         const team1Mat = new THREE.MeshStandardMaterial({ color: team1Color });
         const team1GoalieMat = new THREE.MeshStandardMaterial({ color: team1GoalieColor });
         const team2Mat = new THREE.MeshStandardMaterial({ color: team2Color });
@@ -100,25 +115,25 @@
 
         function createPlayer(material) {
             const group = new THREE.Group();
-            
+
             // Body (cylinder)
             const bodyGeo = new THREE.CylinderGeometry(0.8, 0.8, 4, 16);
             const body = new THREE.Mesh(bodyGeo, material);
             body.position.y = 2;
             group.add(body);
-            
+
             // Head (sphere)
             const headGeo = new THREE.SphereGeometry(1, 16, 16);
             const head = new THREE.Mesh(headGeo, material);
             head.position.y = 4.5;
             group.add(head);
-            
+
             return group;
         }
 
         function createStick(stickLength) {
             const group = new THREE.Group();
-            
+
             // Shaft along X axis
             const shaftGeo = new THREE.BoxGeometry(stickLength, 0.2, 0.2);
             const shaft = new THREE.Mesh(shaftGeo, stickMat);
@@ -139,54 +154,54 @@
         function createGoalFrame(w, h, d, material) {
             const group = new THREE.Group();
             const thickness = 0.4;
-            
+
             // Front posts (facing +x)
             const postGeo = new THREE.BoxGeometry(thickness, h, thickness);
             const post1 = new THREE.Mesh(postGeo, material);
-            post1.position.set(w/2 - thickness/2, h/2, d/2 - thickness/2);
+            post1.position.set(w / 2 - thickness / 2, h / 2, d / 2 - thickness / 2);
             group.add(post1);
-            
+
             const post2 = new THREE.Mesh(postGeo, material);
-            post2.position.set(w/2 - thickness/2, h/2, -d/2 + thickness/2);
+            post2.position.set(w / 2 - thickness / 2, h / 2, -d / 2 + thickness / 2);
             group.add(post2);
-            
+
             // Crossbar
             const crossbarGeo = new THREE.BoxGeometry(thickness, thickness, d);
             const crossbar = new THREE.Mesh(crossbarGeo, material);
-            crossbar.position.set(w/2 - thickness/2, h - thickness/2, 0);
+            crossbar.position.set(w / 2 - thickness / 2, h - thickness / 2, 0);
             group.add(crossbar);
 
             // Base sides (bottom)
             const baseSideGeo = new THREE.BoxGeometry(w, thickness, thickness);
             const base1 = new THREE.Mesh(baseSideGeo, material);
-            base1.position.set(0, thickness/2, d/2 - thickness/2);
+            base1.position.set(0, thickness / 2, d / 2 - thickness / 2);
             group.add(base1);
-            
+
             const base2 = new THREE.Mesh(baseSideGeo, material);
-            base2.position.set(0, thickness/2, -d/2 + thickness/2);
+            base2.position.set(0, thickness / 2, -d / 2 + thickness / 2);
             group.add(base2);
-            
+
             // Base back
-            const baseBackGeo = new THREE.BoxGeometry(thickness, thickness, d - thickness*2);
+            const baseBackGeo = new THREE.BoxGeometry(thickness, thickness, d - thickness * 2);
             const base3 = new THREE.Mesh(baseBackGeo, material);
-            base3.position.set(-w/2 + thickness/2, thickness/2, 0);
+            base3.position.set(-w / 2 + thickness / 2, thickness / 2, 0);
             group.add(base3);
 
             // Diagonal supports (from back bottom corner to front top corner)
-            const diagLen = Math.sqrt(w*w + h*h);
+            const diagLen = Math.sqrt(w * w + h * h);
             const diagGeo = new THREE.BoxGeometry(diagLen, thickness, thickness);
             const angle = Math.atan2(h, w);
-            
+
             const diag1 = new THREE.Mesh(diagGeo, material);
             diag1.rotation.z = angle;
-            diag1.position.set(0, h/2, d/2 - thickness/2);
+            diag1.position.set(0, h / 2, d / 2 - thickness / 2);
             group.add(diag1);
-            
+
             const diag2 = new THREE.Mesh(diagGeo, material);
             diag2.rotation.z = angle;
-            diag2.position.set(0, h/2, -d/2 + thickness/2);
+            diag2.position.set(0, h / 2, -d / 2 + thickness / 2);
             group.add(diag2);
-            
+
             return group;
         }
 
@@ -199,27 +214,27 @@
 
             rinkShape.moveTo(r, 0);
             rinkShape.lineTo(w - r, 0);
-            rinkShape.absarc(w - r, r, r, -Math.PI/2, 0, false);
+            rinkShape.absarc(w - r, r, r, -Math.PI / 2, 0, false);
             rinkShape.lineTo(w, h - r);
-            rinkShape.absarc(w - r, h - r, r, 0, Math.PI/2, false);
+            rinkShape.absarc(w - r, h - r, r, 0, Math.PI / 2, false);
             rinkShape.lineTo(r, h);
-            rinkShape.absarc(r, h - r, r, Math.PI/2, Math.PI, false);
+            rinkShape.absarc(r, h - r, r, Math.PI / 2, Math.PI, false);
             rinkShape.lineTo(0, r);
-            rinkShape.absarc(r, r, r, Math.PI, Math.PI*1.5, false);
+            rinkShape.absarc(r, r, r, Math.PI, Math.PI * 1.5, false);
 
             const rinkGeo = new THREE.ShapeGeometry(rinkShape);
             const rinkMat = new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide });
             const rink = new THREE.Mesh(rinkGeo, rinkMat);
             rink.rotation.x = -Math.PI / 2;
             // Center the rink roughly around 0,0
-            rink.position.set(-w/2, 0, h/2);
+            rink.position.set(-w / 2, 0, h / 2);
             scene.add(rink);
-            
+
             // Lines
             const lineMat = new THREE.LineBasicMaterial({ color: 0xff0000 });
             const points = [];
-            points.push(new THREE.Vector3(0, 0.01, -h/2));
-            points.push(new THREE.Vector3(0, 0.01, h/2));
+            points.push(new THREE.Vector3(0, 0.01, -h / 2));
+            points.push(new THREE.Vector3(0, 0.01, h / 2));
             const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
             const centerLine = new THREE.Line(lineGeo, lineMat);
             scene.add(centerLine);
@@ -229,16 +244,16 @@
             const goalH = 4;
             const goalD = constants.GOAL_Y_MAX - constants.GOAL_Y_MIN;
             const goalColorMat = new THREE.MeshStandardMaterial({ color: 0xcc0000 }); // red goal frame
-            
+
             const goal1 = createGoalFrame(goalW, goalH, goalD, goalColorMat);
             // Face right
-            goal1.position.set(constants.GOAL_X_1 - w/2 - goalW/2, 0, (constants.GOAL_Y_MIN + constants.GOAL_Y_MAX)/2 - h/2);
+            goal1.position.set(constants.GOAL_X_1 - w / 2 - goalW / 2, 0, (constants.GOAL_Y_MIN + constants.GOAL_Y_MAX) / 2 - h / 2);
             scene.add(goal1);
 
             const goal2 = createGoalFrame(goalW, goalH, goalD, goalColorMat);
             // Face left (rotate 180 degrees)
             goal2.rotation.y = Math.PI;
-            goal2.position.set(constants.GOAL_X_2 - w/2 + goalW/2, 0, (constants.GOAL_Y_MIN + constants.GOAL_Y_MAX)/2 - h/2);
+            goal2.position.set(constants.GOAL_X_2 - w / 2 + goalW / 2, 0, (constants.GOAL_Y_MIN + constants.GOAL_Y_MAX) / 2 - h / 2);
             scene.add(goal2);
 
             // Camera positioning
@@ -270,12 +285,12 @@
                     scene.add(stick);
                     p1Sticks.push(stick);
                 }
-                
+
                 state.p1_pos.forEach((pos, idx) => {
-                    const px = pos[0] - w/2;
-                    const pz = pos[1] - h/2;
+                    const px = pos[0] - w / 2;
+                    const pz = pos[1] - h / 2;
                     p1Objects[idx].position.set(px, 0, pz);
-                    
+
                     const stickAngle = state.p1_stick_angle[idx];
                     p1Sticks[idx].position.set(px, 0, pz);
                     p1Sticks[idx].rotation.y = -stickAngle;
@@ -295,12 +310,12 @@
                     scene.add(stick);
                     p2Sticks.push(stick);
                 }
-                
+
                 state.p2_pos.forEach((pos, idx) => {
-                    const px = pos[0] - w/2;
-                    const pz = pos[1] - h/2;
+                    const px = pos[0] - w / 2;
+                    const pz = pos[1] - h / 2;
                     p2Objects[idx].position.set(px, 0, pz);
-                    
+
                     const stickAngle = state.p2_stick_angle[idx];
                     p2Sticks[idx].position.set(px, 0, pz);
                     p2Sticks[idx].rotation.y = -stickAngle;
@@ -308,37 +323,37 @@
             }
 
             if (state.puck_pos && puckMesh) {
-                puckMesh.position.x = state.puck_pos[0] - w/2;
-                puckMesh.position.z = state.puck_pos[1] - h/2;
+                puckMesh.position.x = state.puck_pos[0] - w / 2;
+                puckMesh.position.z = state.puck_pos[1] - h / 2;
             }
 
             if (state.score) {
                 scoreElem.innerText = `Score: ${state.score[0]} - ${state.score[1]}`;
             }
-          
+
             if (state.is_replay) {
                 if (!wasReplay) {
-                     replayText.style.display = 'block';
-                  }
-                  wasReplay = true;
-             } else {
-                  if (wasReplay) {
-                      replayText.style.display = 'none';
-                  }
-                  wasReplay = false;
-             }
+                    replayText.style.display = 'block';
+                }
+                wasReplay = true;
+            } else {
+                if (wasReplay) {
+                    replayText.style.display = 'none';
+                }
+                wasReplay = false;
+            }
 
-             if (state.play_horn) {
-                  // If it's paused or reached the end, play it
-                 if (goalHorn.paused) {
-                     goalHorn.currentTime = 0;
-                     goalHorn.play().catch(e => console.error("Horn play error:", e));
-                 
-                 }
-              }
+            if (state.play_horn) {
+                // If it's paused or reached the end, play it
+                if (goalHorn.paused) {
+                    goalHorn.currentTime = 0;
+                    goalHorn.play().catch(e => console.error("Horn play error:", e));
+
+                }
+            }
 
         }
-      
+
 
         function animate() {
             requestAnimationFrame(animate);
@@ -379,4 +394,5 @@
         fetchConstants();
     </script>
 </body>
+
 </html>
