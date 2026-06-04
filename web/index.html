@@ -360,6 +360,22 @@
             if (state.is_replay) {
                 if (!wasReplay) {
                     replayText.style.display = 'block';
+                    t1CelebrateEnd = 0;
+                    t2CelebrateEnd = 0;
+
+                    p1Sticks.forEach(stick => {
+                        if (stick.userData.pivot) {
+                            stick.userData.pivot.rotation.z = 0;
+                            stick.userData.pivot.position.y = 2;
+                        }
+                    });
+
+                    p2Sticks.forEach(stick => {
+                        if (stick.userData.pivot) {
+                            stick.userData.pivot.rotation.z = 0;
+                            stick.userData.pivot.position.y = 2;
+                        }
+                    });
                 }
                 wasReplay = true;
             } else {
