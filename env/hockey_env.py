@@ -108,6 +108,7 @@ class HockeyEnv:
             if scored_goal:
                 if getattr(self, 'use_web', False):
                     self.pending_replay = True
+                    self.play_horn = True
                     self.goal_scored_step = self.steps
                 else:
                     self._reset_positions()
@@ -116,19 +117,19 @@ class HockeyEnv:
         else:
             self._resolve_net_collision(self.puck_pos, self.puck_vel, True)
 
-            if self.steps >= self.goal_scored_step + 50:
+            if self.steps >= self.goal_scored_step + CONSTANTS["REPLAY_DELAY"]:
                 self.is_replay = True
+                self.play_horn = False
                 actual_score = copy.deepcopy(self.score)
 
                 # Replay sequence: last 100 steps from history up to goal_scored_step + 10
                 # Filter history for items where step <= goal_scored_step + 10
-                replay_history = [s for s in self.history if s["step"] <= self.goal_scored_step + 10]
+                replay_history = [s for s in self.history if s["step"] <= self.goal_scored_step + CONSTANTS["REPLAY_PAST_STEPS"]]
                 # Then take the last 100 of those
-                if len(replay_history) > 100:
-                    replay_history = replay_history[-100:]
+                if len(replay_history) > CONSTANTS["REPLAY_MAX_STEPS"]:
+                    replay_history = replay_history[-CONSTANTS["REPLAY_MAX_STEPS"]:]
 
                 for state_snapshot in replay_history:
-                    self.play_horn = (state_snapshot["step"] >= self.goal_scored_step)
                     self.p1_pos = state_snapshot["p1_pos"]
                     self.p2_pos = state_snapshot["p2_pos"]
                     self.p1_stick_angle = state_snapshot["p1_stick_angle"]

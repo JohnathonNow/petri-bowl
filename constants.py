@@ -75,4 +75,9 @@ CONSTANTS = {
     # Canvas
     "CANVAS_WIDTH": 800,
     "CANVAS_HEIGHT": 400,
+
+    # Replay
+    "REPLAY_MAX_STEPS": 100,
+    "REPLAY_PAST_STEPS": 50,
+    "REPLAY_DELAY": 100,
 }
