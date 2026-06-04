@@ -44,7 +44,8 @@ class HockeyHTTPRequestHandler(BaseHTTPRequestHandler):
                     "p2_stick_angle": global_env.p2_stick_angle,
                     "puck_pos": global_env.puck_pos,
                     "score": global_env.score,
-                    "is_replay": getattr(global_env, 'is_replay', False)
+                    "is_replay": getattr(global_env, 'is_replay', False),
+                    "play_horn": getattr(global_env, 'play_horn', False)
                 }
             else:
                 state = {}

@@ -315,18 +315,22 @@
 
             if (state.is_replay) {
                 if (!wasReplay) {
-                    goalHorn.currentTime = 0;
-                    goalHorn.play().catch(e => console.error("Horn play error:", e));
                     replayText.style.display = 'block';
                 }
                 wasReplay = true;
             } else {
                 if (wasReplay) {
-                    goalHorn.pause();
-                    goalHorn.currentTime = 0;
                     replayText.style.display = 'none';
                 }
                 wasReplay = false;
+            }
+
+            if (state.play_horn) {
+                // If it's paused or reached the end, play it
+                if (goalHorn.paused) {
+                    goalHorn.currentTime = 0;
+                    goalHorn.play().catch(e => console.error("Horn play error:", e));
+                }
             }
 
             renderer.render(scene, camera);
