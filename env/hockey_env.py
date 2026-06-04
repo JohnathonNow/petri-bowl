@@ -1,5 +1,7 @@
 import math
 import random
+import time
+import copy
 from constants import CONSTANTS
 
 class HockeyEnv:
@@ -11,10 +13,29 @@ class HockeyEnv:
     def reset(self):
         self.score = [0, 0] # Team 1, Team 2
         self.steps = 0
+        self.history = []
+        self.is_replay = False
+        self.pending_replay = False
+        self.goal_scored_step = None
+        self.play_horn = False
         self._reset_positions()
 
     def step(self, actions1, actions2):
         self.steps += 1
+
+        if getattr(self, 'use_web', False):
+            state_snapshot = {
+                "step": self.steps,
+                "p1_pos": copy.deepcopy(self.p1_pos),
+                "p2_pos": copy.deepcopy(self.p2_pos),
+                "p1_stick_angle": copy.deepcopy(self.p1_stick_angle),
+                "p2_stick_angle": copy.deepcopy(self.p2_stick_angle),
+                "puck_pos": copy.deepcopy(self.puck_pos),
+                "score": copy.deepcopy(self.score)
+            }
+            self.history.append(state_snapshot)
+            if len(self.history) > 200:
+                self.history.pop(0)
 
         # actions: 0=up, 1=down, 2=left, 3=right, 4=stay
         speed = CONSTANTS["SPEED"]
@@ -73,20 +94,56 @@ class HockeyEnv:
         goal_y_min = CONSTANTS["GOAL_Y_MIN"]
         goal_y_max = CONSTANTS["GOAL_Y_MAX"]
 
-        scored_goal = False
-        if old_puck_x > CONSTANTS["GOAL_X_1"] and self.puck_pos[0] <= CONSTANTS["GOAL_X_1"]:
-            if goal_y_min <= self.puck_pos[1] <= goal_y_max:
-                self.score[1] += 1
-                self._reset_positions()
-                scored_goal = True
-        elif old_puck_x < CONSTANTS["GOAL_X_2"] and self.puck_pos[0] >= CONSTANTS["GOAL_X_2"]:
-            if goal_y_min <= self.puck_pos[1] <= goal_y_max:
-                self.score[0] += 1
-                self._reset_positions()
-                scored_goal = True
+        if not getattr(self, 'pending_replay', False):
+            scored_goal = False
+            if old_puck_x > CONSTANTS["GOAL_X_1"] and self.puck_pos[0] <= CONSTANTS["GOAL_X_1"]:
+                if goal_y_min <= self.puck_pos[1] <= goal_y_max:
+                    self.score[1] += 1
+                    scored_goal = True
+            elif old_puck_x < CONSTANTS["GOAL_X_2"] and self.puck_pos[0] >= CONSTANTS["GOAL_X_2"]:
+                if goal_y_min <= self.puck_pos[1] <= goal_y_max:
+                    self.score[0] += 1
+                    scored_goal = True
 
-        if not scored_goal:
+            if scored_goal:
+                if getattr(self, 'use_web', False):
+                    self.pending_replay = True
+                    self.play_horn = True
+                    self.goal_scored_step = self.steps
+                else:
+                    self._reset_positions()
+            else:
+                self._resolve_net_collision(self.puck_pos, self.puck_vel, True)
+        else:
             self._resolve_net_collision(self.puck_pos, self.puck_vel, True)
+
+            if self.steps >= self.goal_scored_step + CONSTANTS["REPLAY_DELAY"]:
+                self.is_replay = True
+                self.play_horn = False
+                actual_score = copy.deepcopy(self.score)
+
+                # Replay sequence: last 100 steps from history up to goal_scored_step + 10
+                # Filter history for items where step <= goal_scored_step + 10
+                replay_history = [s for s in self.history if s["step"] <= self.goal_scored_step + CONSTANTS["REPLAY_PAST_STEPS"]]
+                # Then take the last 100 of those
+                if len(replay_history) > CONSTANTS["REPLAY_MAX_STEPS"]:
+                    replay_history = replay_history[-CONSTANTS["REPLAY_MAX_STEPS"]:]
+
+                for state_snapshot in replay_history:
+                    self.p1_pos = state_snapshot["p1_pos"]
+                    self.p2_pos = state_snapshot["p2_pos"]
+                    self.p1_stick_angle = state_snapshot["p1_stick_angle"]
+                    self.p2_stick_angle = state_snapshot["p2_stick_angle"]
+                    self.puck_pos = state_snapshot["puck_pos"]
+                    self.score = state_snapshot["score"]
+                    time.sleep(0.05)
+
+                self.is_replay = False
+                self.play_horn = False
+                self.pending_replay = False
+                self.score = actual_score
+                self.history = []
+                self._reset_positions()
 
         # Goalie constraints
         # Team 1 goalie
