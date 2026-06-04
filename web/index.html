@@ -22,6 +22,7 @@
     </style>
     <!-- Include Three.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
     <div id="scoreContainer">
@@ -64,6 +65,8 @@
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
 
         // Lighting
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
@@ -312,29 +315,37 @@
             if (state.score) {
                 scoreElem.innerText = `Score: ${state.score[0]} - ${state.score[1]}`;
             }
-
+          
             if (state.is_replay) {
                 if (!wasReplay) {
-                    replayText.style.display = 'block';
-                }
-                wasReplay = true;
-            } else {
-                if (wasReplay) {
-                    replayText.style.display = 'none';
-                }
-                wasReplay = false;
-            }
+                     replayText.style.display = 'block';
+                  }
+                  wasReplay = true;
+             } else {
+                  if (wasReplay) {
+                      replayText.style.display = 'none';
+                  }
+                  wasReplay = false;
+             }
 
-            if (state.play_horn) {
-                // If it's paused or reached the end, play it
-                if (goalHorn.paused) {
-                    goalHorn.currentTime = 0;
-                    goalHorn.play().catch(e => console.error("Horn play error:", e));
-                }
-            }
+             if (state.play_horn) {
+                  // If it's paused or reached the end, play it
+                 if (goalHorn.paused) {
+                     goalHorn.currentTime = 0;
+                     goalHorn.play().catch(e => console.error("Horn play error:", e));
+                 
+                 }
+              }
 
+        }
+      
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (typeof controls !== 'undefined') controls.update();
             renderer.render(scene, camera);
         }
+        animate();
 
         async function fetchConstants() {
             try {
