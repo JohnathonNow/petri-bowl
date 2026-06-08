@@ -62,20 +62,22 @@
         <h2 id="replayText" style="display: none; color: red; animation: blink 1s linear infinite;">REPLAY</h2>
     </div>
     <div id="modelControls">
-        <h3>Model Controls</h3>
-        <div>
-            <button id="btnExport">Export Current Model</button>
-        </div>
-        <hr>
-        <div>
-            <label>Architecture JSON:</label><br>
-            <input type="file" id="archInput" accept=".json">
-        </div>
-        <div>
-            <label>Weights JSON:</label><br>
-            <input type="file" id="weightsInput" accept=".json">
-        </div>
-        <button id="btnUpload">Upload Model</button>
+        <details>
+            <summary style="cursor: pointer;"><h3>Model Controls</h3></summary>
+            <div>
+                <button id="btnExport">Export Current Model</button>
+            </div>
+            <hr>
+            <div>
+                <label>Architecture JSON:</label><br>
+                <input type="file" id="archInput" accept=".json">
+            </div>
+            <div>
+                <label>Weights JSON:</label><br>
+                <input type="file" id="weightsInput" accept=".json">
+            </div>
+            <button id="btnUpload">Upload Model</button>
+        </details>
     </div>
 
     <div id="overlay"
@@ -363,13 +365,59 @@
             scene.add(rink);
 
             // Lines
-            const lineMat = new THREE.LineBasicMaterial({ color: 0xff0000 });
-            const points = [];
-            points.push(new THREE.Vector3(0, 0.01, -h / 2));
-            points.push(new THREE.Vector3(0, 0.01, h / 2));
-            const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
-            const centerLine = new THREE.Line(lineGeo, lineMat);
+            const centerLineMat = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 2 });
+            const centerPoints = [];
+            centerPoints.push(new THREE.Vector3(0, 0.01, -h / 2));
+            centerPoints.push(new THREE.Vector3(0, 0.01, h / 2));
+            const centerLineGeo = new THREE.BufferGeometry().setFromPoints(centerPoints);
+            const centerLine = new THREE.Line(centerLineGeo, centerLineMat);
             scene.add(centerLine);
+
+            const blueLineMat = new THREE.LineBasicMaterial({ color: 0x0000ff });
+            const bLine1Points = [];
+            bLine1Points.push(new THREE.Vector3(-12.5, 0.01, -h / 2));
+            bLine1Points.push(new THREE.Vector3(-12.5, 0.01, h / 2));
+            const bLine1Geo = new THREE.BufferGeometry().setFromPoints(bLine1Points);
+            const blueLine1 = new THREE.Line(bLine1Geo, blueLineMat);
+            scene.add(blueLine1);
+
+            const bLine2Points = [];
+            bLine2Points.push(new THREE.Vector3(12.5, 0.01, -h / 2));
+            bLine2Points.push(new THREE.Vector3(12.5, 0.01, h / 2));
+            const bLine2Geo = new THREE.BufferGeometry().setFromPoints(bLine2Points);
+            const blueLine2 = new THREE.Line(bLine2Geo, blueLineMat);
+            scene.add(blueLine2);
+
+            const goalLineMat = new THREE.LineBasicMaterial({ color: 0xff0000 });
+            const gl1Points = [];
+            gl1Points.push(new THREE.Vector3(constants.GOAL_X_1 - w / 2, 0.01, -24.14));
+            gl1Points.push(new THREE.Vector3(constants.GOAL_X_1 - w / 2, 0.01, 24.14));
+            const gl1Geo = new THREE.BufferGeometry().setFromPoints(gl1Points);
+            const goalLine1 = new THREE.Line(gl1Geo, goalLineMat);
+            scene.add(goalLine1);
+
+            const gl2Points = [];
+            gl2Points.push(new THREE.Vector3(constants.GOAL_X_2 - w / 2, 0.01, -24.14));
+            gl2Points.push(new THREE.Vector3(constants.GOAL_X_2 - w / 2, 0.01, 24.14));
+            const gl2Geo = new THREE.BufferGeometry().setFromPoints(gl2Points);
+            const goalLine2 = new THREE.Line(gl2Geo, goalLineMat);
+            scene.add(goalLine2);
+
+            // Goal Creases
+            const creaseGeo = new THREE.CircleGeometry(4, 32, 0, Math.PI);
+            const creaseMat = new THREE.MeshBasicMaterial({ color: 0xadd8e6, side: THREE.DoubleSide });
+
+            const crease1 = new THREE.Mesh(creaseGeo, creaseMat);
+            crease1.rotation.x = -Math.PI / 2;
+            crease1.rotation.z = -Math.PI / 2;
+            crease1.position.set(constants.GOAL_X_1 - w / 2, 0.02, 0);
+            scene.add(crease1);
+
+            const crease2 = new THREE.Mesh(creaseGeo, creaseMat);
+            crease2.rotation.x = -Math.PI / 2;
+            crease2.rotation.z = Math.PI / 2;
+            crease2.position.set(constants.GOAL_X_2 - w / 2, 0.02, 0);
+            scene.add(crease2);
 
             // Goals
             const goalW = 4;
