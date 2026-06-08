@@ -1,16 +1,50 @@
 import argparse
 import threading
+import torch
+import torch.optim as optim
 from env.hockey_env import HockeyEnv
 from agents.agent import Team, get_state, get_expert_action
-from web.server import run_server, set_global_env
+from agents.models import PlayerNet
+from web.server import run_server, set_global_env, set_global_teams, get_uploaded_model
 from constants import CONSTANTS
 
 pretrain = True
+
+def check_and_apply_uploaded_model(team1, team2):
+    model_data = get_uploaded_model()
+    if model_data:
+        arch = model_data.get('architecture', {})
+        weights = model_data.get('weights', {})
+        if arch and weights:
+            print("Applying newly uploaded model...", flush=True)
+            # Update constants for new architecture
+            for k, v in arch.items():
+                if k in CONSTANTS:
+                    CONSTANTS[k] = v
+
+            for team in [team1, team2]:
+                for agent in team.agents:
+                    # Re-instantiate net with new architecture constants
+                    agent.net = PlayerNet()
+                    # Convert weight lists back to tensors
+                    state_dict = agent.net.state_dict()
+                    for key, val in weights.items():
+                        if key in state_dict:
+                            # Try to reshape to expected size
+                            tensor_val = torch.tensor(val, dtype=torch.float32)
+                            if tensor_val.shape == state_dict[key].shape:
+                                state_dict[key] = tensor_val
+                            else:
+                                print(f"Shape mismatch for {key}: expected {state_dict[key].shape}, got {tensor_val.shape}")
+                    agent.net.load_state_dict(state_dict)
+                    agent.opt = optim.Adam(agent.net.parameters(), lr=CONSTANTS["LR"])
 
 def train(use_web=False):
     global pretrain
     team1 = Team()
     team2 = Team()
+
+    set_global_teams([team1, team2])
 
     env = HockeyEnv()
     env.use_web = use_web
@@ -23,6 +57,7 @@ def train(use_web=False):
 
     print("Starting pre-training phase...", flush=True)
     for _ in range(CONSTANTS["PRETRAIN_EPOCHS"]):
+        check_and_apply_uploaded_model(team1, team2)
         env.reset()
         for _ in range(CONSTANTS["PRETRAIN_STEPS"]): # max steps per pre-train epoch
             actions1 = []
@@ -81,6 +116,7 @@ def train(use_web=False):
 
     epochs = CONSTANTS["TRAIN_EPOCHS"]
     for epoch in range(epochs):
+        check_and_apply_uploaded_model(team1, team2)
         env.reset()
         done = False
 

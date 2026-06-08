@@ -7,10 +7,22 @@ from constants import CONSTANTS
 from env.hockey_env import HockeyEnv
 
 global_env: HockeyEnv = None
+global_teams = None
+uploaded_model_data = None
 
 def set_global_env(env):
     global global_env
     global_env = env
+
+def set_global_teams(teams):
+    global global_teams
+    global_teams = teams
+
+def get_uploaded_model():
+    global uploaded_model_data
+    model_data = uploaded_model_data
+    uploaded_model_data = None
+    return model_data
 
 class HockeyHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -30,6 +42,31 @@ class HockeyHTTPRequestHandler(BaseHTTPRequestHandler):
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             self.wfile.write(json.dumps(CONSTANTS).encode())
+
+        elif self.path == '/export_architecture':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            arch = {
+                "NET_INPUT": CONSTANTS["NET_INPUT"],
+                "NET_HIDDEN1": CONSTANTS["NET_HIDDEN1"],
+                "NET_HIDDEN2": CONSTANTS["NET_HIDDEN2"],
+                "NET_OUT_MOVE": CONSTANTS["NET_OUT_MOVE"],
+                "NET_OUT_STICK": CONSTANTS["NET_OUT_STICK"]
+            }
+            self.wfile.write(json.dumps(arch).encode())
+
+        elif self.path == '/export_weights':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            weights = {}
+            if global_teams and len(global_teams) > 0:
+                agent = global_teams[0].agents[1]
+                state_dict = agent.net.state_dict()
+                for key, val in state_dict.items():
+                    weights[key] = val.tolist()
+            self.wfile.write(json.dumps(weights).encode())
 
         elif self.path == '/state':
             self.send_response(200)
@@ -64,6 +101,27 @@ class HockeyHTTPRequestHandler(BaseHTTPRequestHandler):
             except FileNotFoundError:
                 self.send_response(404)
                 self.end_headers()
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def do_POST(self):
+        if self.path == '/upload_model':
+            content_length = int(self.headers.get('Content-Length', 0))
+            post_data = self.rfile.read(content_length)
+            try:
+                data = json.loads(post_data.decode('utf-8'))
+                global uploaded_model_data
+                uploaded_model_data = data
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "success"}).encode())
+            except Exception as e:
+                self.send_response(400)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "error", "message": str(e)}).encode())
         else:
             self.send_response(404)
             self.end_headers()
