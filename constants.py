@@ -31,6 +31,20 @@ CONSTANTS = {
     "P2_INIT_STICK_ANGLE": math.pi,
     "PUCK_INIT_POS": [50.0, 25.0],
 
+    # Refs
+    "NUM_REFS": 2,
+    "REF_SPEED": 0.15,
+    "REF_INIT_POS": [
+        [50.0, 5.0],
+        [50.0, 45.0]
+    ],
+    "REF_AVOID_DIST": 5.0,
+
+    # Checking
+    "CHECKING_DIST": 2.0,
+    "CHECKING_SPEED_THRESH": 0.2,
+    "CHECKING_EFFECT": 0.2,
+
     # Goalie constraints
     "G1_MIN_X": 10.0,
     "G1_MAX_X": 20.0,
