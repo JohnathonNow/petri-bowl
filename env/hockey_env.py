@@ -18,10 +18,42 @@ class HockeyEnv:
         self.pending_replay = False
         self.goal_scored_step = None
         self.play_horn = False
+
+        self.last_touched_team = None
+        self.last_touched_x = None
+        self.icing_potential = False
+
         self._reset_positions()
 
     def step(self, actions1, actions2):
         self.steps += 1
+
+        # checking mechanics
+        check_dist = CONSTANTS["CHECKING_DIST"]
+        check_speed_thresh = CONSTANTS["CHECKING_SPEED_THRESH"]
+        check_effect = CONSTANTS["CHECKING_EFFECT"]
+
+        for i, p1 in enumerate(self.p1_pos):
+            for j, p2 in enumerate(self.p2_pos):
+                dx = p1[0] - p2[0]
+                dy = p1[1] - p2[1]
+                dist = math.hypot(dx, dy)
+
+                if dist < check_dist:
+                    v1x, v1y = self.p1_vel[i]
+                    v2x, v2y = self.p2_vel[j]
+
+                    rel_vx = v1x - v2x
+                    rel_vy = v1y - v2y
+                    rel_speed = math.hypot(rel_vx, rel_vy)
+
+                    if rel_speed > check_speed_thresh:
+                        # Transfer some momentum / reduce velocities
+                        self.p1_vel[i][0] *= (1.0 - check_effect)
+                        self.p1_vel[i][1] *= (1.0 - check_effect)
+                        self.p2_vel[j][0] *= (1.0 - check_effect)
+                        self.p2_vel[j][1] *= (1.0 - check_effect)
+
 
         if getattr(self, 'use_web', False):
             state_snapshot = {
@@ -31,7 +63,8 @@ class HockeyEnv:
                 "p1_stick_angle": copy.deepcopy(self.p1_stick_angle),
                 "p2_stick_angle": copy.deepcopy(self.p2_stick_angle),
                 "puck_pos": copy.deepcopy(self.puck_pos),
-                "score": copy.deepcopy(self.score)
+                "score": copy.deepcopy(self.score),
+                "ref_pos": copy.deepcopy(self.ref_pos)
             }
             self.history.append(state_snapshot)
             if len(self.history) > 200:
@@ -59,6 +92,54 @@ class HockeyEnv:
             self.p1_pos[i][1] += self.p1_vel[i][1]
             self._apply_bounds(self.p1_pos[i], self.p1_vel[i])
             self._resolve_net_collision(self.p1_pos[i], self.p1_vel[i], False)
+
+        # move ref
+        ref_speed = CONSTANTS["REF_SPEED"]
+        for i in range(len(self.ref_pos)):
+            rx, ry = self.ref_pos[i]
+            px, py = self.puck_pos
+
+            # Vector towards puck
+            dx = px - rx
+            dy = py - ry
+            dist_to_puck = math.hypot(dx, dy)
+
+            if dist_to_puck > 0:
+                nx = dx / dist_to_puck
+                ny = dy / dist_to_puck
+            else:
+                nx, ny = 0, 0
+
+            # If too close to puck, back away
+            if dist_to_puck < CONSTANTS["REF_AVOID_DIST"]:
+                nx = -nx
+                ny = -ny
+
+            # Avoid players
+            avoid_x, avoid_y = 0.0, 0.0
+            for players in [self.p1_pos, self.p2_pos]:
+                for player in players:
+                    pdx = rx - player[0]
+                    pdy = ry - player[1]
+                    pdist = math.hypot(pdx, pdy)
+                    if pdist < CONSTANTS["REF_AVOID_DIST"] and pdist > 0:
+                        avoid_x += pdx / pdist
+                        avoid_y += pdy / pdist
+
+            vx = nx * ref_speed + avoid_x * ref_speed
+            vy = ny * ref_speed + avoid_y * ref_speed
+
+            v_mag = math.hypot(vx, vy)
+            if v_mag > ref_speed:
+                vx = (vx / v_mag) * ref_speed
+                vy = (vy / v_mag) * ref_speed
+
+            self.ref_vel[i][0] = vx
+            self.ref_vel[i][1] = vy
+
+            self.ref_pos[i][0] += self.ref_vel[i][0]
+            self.ref_pos[i][1] += self.ref_vel[i][1]
+            self._apply_bounds(self.ref_pos[i], self.ref_vel[i])
 
         # move p2
         for i in range(len(self.p2_pos)):
@@ -136,6 +217,7 @@ class HockeyEnv:
                     self.p2_stick_angle = state_snapshot["p2_stick_angle"]
                     self.puck_pos = state_snapshot["puck_pos"]
                     self.score = state_snapshot["score"]
+                    self.ref_pos = state_snapshot.get("ref_pos", self.ref_pos)
                     time.sleep(0.05)
 
                 self.is_replay = False
@@ -155,7 +237,7 @@ class HockeyEnv:
         self.p2_pos[0][1] = max(CONSTANTS["G2_MIN_Y"], min(CONSTANTS["G2_MAX_Y"], self.p2_pos[0][1]))
 
         # Player-stick-puck collisions
-        def check_stick_collision(p_pos, p_angle):
+        def check_stick_collision(p_pos, p_angle, team_id):
             # Stick modeled as line segment starting at p_pos
             stick_length = CONSTANTS["STICK_LENGTH"]
             puck_x, puck_y = self.puck_pos
@@ -188,6 +270,10 @@ class HockeyEnv:
 
             # Threshold for collision
             if dist < CONSTANTS["PUCK_RADIUS_THRESH"]:
+                self.last_touched_team = team_id
+                self.last_touched_x = self.puck_pos[0]
+                self.icing_potential = True
+
                 if dist == 0:
                     self.puck_vel[0] += random.choice([-1.0, 1.0])
                     self.puck_vel[1] += random.choice([-1.0, 1.0])
@@ -196,12 +282,45 @@ class HockeyEnv:
                     self.puck_vel[1] += (dy/dist) * 2.0
 
         for p, angle in zip(self.p1_pos, self.p1_stick_angle):
-            check_stick_collision(p, angle)
+            check_stick_collision(p, angle, 1)
         for p, angle in zip(self.p2_pos, self.p2_stick_angle):
-            check_stick_collision(p, angle)
+            check_stick_collision(p, angle, 2)
+
+        # Icing checks
+        goal_x1 = CONSTANTS["GOAL_X_1"]
+        goal_x2 = CONSTANTS["GOAL_X_2"]
+        center_line = self.width / 2.0
+
+        if self.icing_potential and self.last_touched_team is not None:
+            # Icing team 1: shot from < center, passes goal_x2
+            if self.last_touched_team == 1 and self.last_touched_x <= center_line:
+                if self.puck_pos[0] >= goal_x2:
+                    # Icing!
+                    self._handle_icing(1)
+
+            # Icing team 2: shot from > center, passes goal_x1
+            elif self.last_touched_team == 2 and self.last_touched_x >= center_line:
+                if self.puck_pos[0] <= goal_x1:
+                    # Icing!
+                    self._handle_icing(2)
+
 
         done = self.steps >= CONSTANTS["MAX_STEPS"]
         return done
+
+    def _handle_icing(self, team_id):
+        self.icing_potential = False
+        self.last_touched_team = None
+
+        # Reset positions but move puck to defensive zone of icing team
+        self._reset_positions()
+
+        if team_id == 1:
+            # Team 1 iced the puck, faceoff in Team 1 zone (left side)
+            self.puck_pos = [15.0, 25.0]
+        else:
+            # Team 2 iced the puck, faceoff in Team 2 zone (right side)
+            self.puck_pos = [85.0, 25.0]
 
     def _resolve_net_collision(self, pos, vel, is_puck):
         # Team 1 net
@@ -303,3 +422,6 @@ class HockeyEnv:
 
         self.puck_pos = list(CONSTANTS["PUCK_INIT_POS"])
         self.puck_vel = [0.0, 0.0]
+
+        self.ref_pos = [list(pos) for pos in CONSTANTS["REF_INIT_POS"]]
+        self.ref_vel = [[0.0, 0.0] for _ in range(CONSTANTS["NUM_REFS"])]

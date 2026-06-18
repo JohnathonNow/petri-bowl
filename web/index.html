@@ -221,12 +221,14 @@
         const stickMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
         const puckMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
         const goalMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+        const refMat = new THREE.MeshStandardMaterial({ color: 0x888888 }); // Grey for refs
 
         // Objects
         let p1Objects = [];
         let p2Objects = [];
         let p1Sticks = [];
         let p2Sticks = [];
+        let refObjects = [];
         let puckMesh = null;
 
         let currentScore = [0, 0];
@@ -499,6 +501,21 @@
                     const stickAngle = state.p2_stick_angle[idx];
                     p2Sticks[idx].position.set(px, 0, pz);
                     p2Sticks[idx].rotation.y = -stickAngle;
+                });
+            }
+
+            // Manage ref objects
+            if (state.ref_pos) {
+                while (refObjects.length < state.ref_pos.length) {
+                    const ref = createPlayer(refMat);
+                    scene.add(ref);
+                    refObjects.push(ref);
+                }
+
+                state.ref_pos.forEach((pos, idx) => {
+                    const px = pos[0] - w / 2;
+                    const pz = pos[1] - h / 2;
+                    refObjects[idx].position.set(px, 0, pz);
                 });
             }
 
