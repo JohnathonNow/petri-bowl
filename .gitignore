@@ -1,2 +1,8 @@
 venv
 *.pyc
+node_modules/
+package-lock.json
+package.json
+.playwright
+football_screenshot.png
+node_modules
