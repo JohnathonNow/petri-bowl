@@ -440,10 +440,10 @@
             camera.position.set(0, 60, 40);
             camera.lookAt(0, 0, 0);
 
-            // Puck
-            const ballGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.4, 16);
+            // Ball
+            const ballGeo = new THREE.SphereGeometry(0.8, 16, 16);
             ballMesh = new THREE.Mesh(ballGeo, ballMat);
-            ballMesh.position.y = 0.2;
+            ballMesh.position.y = 0.8;
             scene.add(ballMesh);
         }
 
@@ -460,20 +460,12 @@
                     const player = createPlayer(mat);
                     scene.add(player);
                     p1Objects.push(player);
-
-                    const stick = createStick(constants.STICK_LENGTH);
-                    scene.add(stick);
-                    p1Sticks.push(stick);
                 }
 
                 state.p1_pos.forEach((pos, idx) => {
                     const px = pos[0] - w / 2;
                     const pz = pos[1] - h / 2;
                     p1Objects[idx].position.set(px, 0, pz);
-
-                    const stickAngle = state.p1_stick_angle[idx];
-                    p1Sticks[idx].position.set(px, 0, pz);
-                    p1Sticks[idx].rotation.y = -stickAngle;
                 });
             }
 
@@ -485,20 +477,12 @@
                     const player = createPlayer(mat);
                     scene.add(player);
                     p2Objects.push(player);
-
-                    const stick = createStick(constants.STICK_LENGTH);
-                    scene.add(stick);
-                    p2Sticks.push(stick);
                 }
 
                 state.p2_pos.forEach((pos, idx) => {
                     const px = pos[0] - w / 2;
                     const pz = pos[1] - h / 2;
                     p2Objects[idx].position.set(px, 0, pz);
-
-                    const stickAngle = state.p2_stick_angle[idx];
-                    p2Sticks[idx].position.set(px, 0, pz);
-                    p2Sticks[idx].rotation.y = -stickAngle;
                 });
             }
 
@@ -546,34 +530,6 @@
         function animate() {
             requestAnimationFrame(animate);
             if (typeof controls !== 'undefined') controls.update();
-
-            const now = Date.now();
-
-            p1Sticks.forEach((stick, idx) => {
-                if (!stick.userData.pivot) return;
-                const pivot = stick.userData.pivot;
-                let targetRotZ = 0;
-                let targetPosY = 2; // Default pivot pos
-                if (idx > 0 && now < t1CelebrateEnd) {
-                    targetRotZ = Math.PI;
-                    targetPosY = 4.5;
-                }
-                pivot.rotation.z = THREE.MathUtils.lerp(pivot.rotation.z, targetRotZ, 0.1);
-                pivot.position.y = THREE.MathUtils.lerp(pivot.position.y, targetPosY, 0.1);
-            });
-
-            p2Sticks.forEach((stick, idx) => {
-                if (!stick.userData.pivot) return;
-                const pivot = stick.userData.pivot;
-                let targetRotZ = 0;
-                let targetPosY = 2; // Default pivot pos
-                if (idx > 0 && now < t2CelebrateEnd) {
-                    targetRotZ = Math.PI;
-                    targetPosY = 4.5;
-                }
-                pivot.rotation.z = THREE.MathUtils.lerp(pivot.rotation.z, targetRotZ, 0.1);
-                pivot.position.y = THREE.MathUtils.lerp(pivot.position.y, targetPosY, 0.1);
-            });
 
             renderer.render(scene, camera);
         }
