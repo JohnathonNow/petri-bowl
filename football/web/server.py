@@ -26,7 +26,7 @@ def get_uploaded_model():
 
 class HockeyHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path == '/':
+        if self.path == '/' or self.path == '/football' or self.path == '/football/':
             self.send_response(200)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
@@ -130,5 +130,5 @@ class HockeyHTTPRequestHandler(BaseHTTPRequestHandler):
         pass
 
 def run_server():
-    server = HTTPServer(('localhost', 8080), HockeyHTTPRequestHandler)
+    server = HTTPServer(('localhost', 8083), HockeyHTTPRequestHandler)
     server.serve_forever()

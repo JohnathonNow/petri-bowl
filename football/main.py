@@ -55,7 +55,7 @@ def train(use_web=False):
     if use_web:
         server_thread = threading.Thread(target=run_server, daemon=True)
         server_thread.start()
-        print("Web UI running at http://localhost:8080/", flush=True)
+        print("Web UI running at http://localhost:8083/", flush=True)
 
     epochs = CONSTANTS["TRAIN_EPOCHS"]
     for epoch in range(epochs):
