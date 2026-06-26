@@ -221,12 +221,14 @@
         const stickMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
         const puckMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
         const goalMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+        const refMat = new THREE.MeshStandardMaterial({ color: 0x888888 }); // Grey for refs
 
         // Objects
         let p1Objects = [];
         let p2Objects = [];
         let p1Sticks = [];
         let p2Sticks = [];
+        let refObjects = [];
         let puckMesh = null;
 
         let currentScore = [0, 0];
@@ -340,55 +342,111 @@
         }
 
         function initScene() {
-            // Field
+            // Rink
+            const rinkShape = new THREE.Shape();
             const w = constants.WIDTH;
             const h = constants.HEIGHT;
+            const r = constants.BOUNDS_RADIUS;
 
-            const fieldGeo = new THREE.PlaneGeometry(w, h);
-            const fieldMat = new THREE.MeshStandardMaterial({ color: 0x228B22, side: THREE.DoubleSide });
-            const field = new THREE.Mesh(fieldGeo, fieldMat);
-            field.rotation.x = -Math.PI / 2;
-            // Center the field
-            field.position.set(0, 0, 0);
-            scene.add(field);
+            rinkShape.moveTo(r, 0);
+            rinkShape.lineTo(w - r, 0);
+            rinkShape.absarc(w - r, r, r, -Math.PI / 2, 0, false);
+            rinkShape.lineTo(w, h - r);
+            rinkShape.absarc(w - r, h - r, r, 0, Math.PI / 2, false);
+            rinkShape.lineTo(r, h);
+            rinkShape.absarc(r, h - r, r, Math.PI / 2, Math.PI, false);
+            rinkShape.lineTo(0, r);
+            rinkShape.absarc(r, r, r, Math.PI, Math.PI * 1.5, false);
 
-            // Endzones
-            const lineMat = new THREE.LineBasicMaterial({ color: 0xffffff });
-            const ez1Points = [];
-            ez1Points.push(new THREE.Vector3(-w / 2, 0.01, -h / 2));
-            ez1Points.push(new THREE.Vector3(-w / 2, 0.01, h / 2));
-            const ez1Geo = new THREE.BufferGeometry().setFromPoints(ez1Points);
-            const ezLine1 = new THREE.Line(ez1Geo, lineMat);
-            scene.add(ezLine1);
+            const rinkGeo = new THREE.ShapeGeometry(rinkShape);
+            const rinkMat = new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+            const rink = new THREE.Mesh(rinkGeo, rinkMat);
+            rink.rotation.x = -Math.PI / 2;
+            // Center the rink roughly around 0,0
+            rink.position.set(-w / 2, 0, h / 2);
+            scene.add(rink);
 
-            const ez2Points = [];
-            ez2Points.push(new THREE.Vector3(w / 2, 0.01, -h / 2));
-            ez2Points.push(new THREE.Vector3(w / 2, 0.01, h / 2));
-            const ez2Geo = new THREE.BufferGeometry().setFromPoints(ez2Points);
-            const ezLine2 = new THREE.Line(ez2Geo, lineMat);
-            scene.add(ezLine2);
+            // Lines
+            const centerLineMat = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 2 });
+            const centerPoints = [];
+            centerPoints.push(new THREE.Vector3(0, 0.01, -h / 2));
+            centerPoints.push(new THREE.Vector3(0, 0.01, h / 2));
+            const centerLineGeo = new THREE.BufferGeometry().setFromPoints(centerPoints);
+            const centerLine = new THREE.Line(centerLineGeo, centerLineMat);
+            scene.add(centerLine);
 
-            // Midfield
-            const midPoints = [];
-            midPoints.push(new THREE.Vector3(0, 0.01, -h / 2));
-            midPoints.push(new THREE.Vector3(0, 0.01, h / 2));
-            const midGeo = new THREE.BufferGeometry().setFromPoints(midPoints);
-            const midLine = new THREE.Line(midGeo, lineMat);
-            scene.add(midLine);
+            const blueLineMat = new THREE.LineBasicMaterial({ color: 0x0000ff });
+            const bLine1Points = [];
+            bLine1Points.push(new THREE.Vector3(-12.5, 0.01, -h / 2));
+            bLine1Points.push(new THREE.Vector3(-12.5, 0.01, h / 2));
+            const bLine1Geo = new THREE.BufferGeometry().setFromPoints(bLine1Points);
+            const blueLine1 = new THREE.Line(bLine1Geo, blueLineMat);
+            scene.add(blueLine1);
+
+            const bLine2Points = [];
+            bLine2Points.push(new THREE.Vector3(12.5, 0.01, -h / 2));
+            bLine2Points.push(new THREE.Vector3(12.5, 0.01, h / 2));
+            const bLine2Geo = new THREE.BufferGeometry().setFromPoints(bLine2Points);
+            const blueLine2 = new THREE.Line(bLine2Geo, blueLineMat);
+            scene.add(blueLine2);
+
+            const goalLineMat = new THREE.LineBasicMaterial({ color: 0xff0000 });
+            const gl1Points = [];
+            gl1Points.push(new THREE.Vector3(constants.GOAL_X_1 - w / 2, 0.01, -24.14));
+            gl1Points.push(new THREE.Vector3(constants.GOAL_X_1 - w / 2, 0.01, 24.14));
+            const gl1Geo = new THREE.BufferGeometry().setFromPoints(gl1Points);
+            const goalLine1 = new THREE.Line(gl1Geo, goalLineMat);
+            scene.add(goalLine1);
+
+            const gl2Points = [];
+            gl2Points.push(new THREE.Vector3(constants.GOAL_X_2 - w / 2, 0.01, -24.14));
+            gl2Points.push(new THREE.Vector3(constants.GOAL_X_2 - w / 2, 0.01, 24.14));
+            const gl2Geo = new THREE.BufferGeometry().setFromPoints(gl2Points);
+            const goalLine2 = new THREE.Line(gl2Geo, goalLineMat);
+            scene.add(goalLine2);
+
+            // Goal Creases
+            const creaseGeo = new THREE.CircleGeometry(4, 32, 0, Math.PI);
+            const creaseMat = new THREE.MeshBasicMaterial({ color: 0xadd8e6, side: THREE.DoubleSide });
+
+            const crease1 = new THREE.Mesh(creaseGeo, creaseMat);
+            crease1.rotation.x = -Math.PI / 2;
+            crease1.rotation.z = -Math.PI / 2;
+            crease1.position.set(constants.GOAL_X_1 - w / 2, 0.02, 0);
+            scene.add(crease1);
+
+            const crease2 = new THREE.Mesh(creaseGeo, creaseMat);
+            crease2.rotation.x = -Math.PI / 2;
+            crease2.rotation.z = Math.PI / 2;
+            crease2.position.set(constants.GOAL_X_2 - w / 2, 0.02, 0);
+            scene.add(crease2);
+
+            // Goals
+            const goalW = 4;
+            const goalH = 4;
+            const goalD = constants.GOAL_Y_MAX - constants.GOAL_Y_MIN;
+            const goalColorMat = new THREE.MeshStandardMaterial({ color: 0xcc0000 }); // red goal frame
+
+            const goal1 = createGoalFrame(goalW, goalH, goalD, goalColorMat);
+            // Face right
+            goal1.position.set(constants.GOAL_X_1 - w / 2 - goalW / 2, 0, (constants.GOAL_Y_MIN + constants.GOAL_Y_MAX) / 2 - h / 2);
+            scene.add(goal1);
+
+            const goal2 = createGoalFrame(goalW, goalH, goalD, goalColorMat);
+            // Face left (rotate 180 degrees)
+            goal2.rotation.y = Math.PI;
+            goal2.position.set(constants.GOAL_X_2 - w / 2 + goalW / 2, 0, (constants.GOAL_Y_MIN + constants.GOAL_Y_MAX) / 2 - h / 2);
+            scene.add(goal2);
 
             // Camera positioning
-            camera.position.set(0, 150, 100);
+            camera.position.set(0, 60, 40);
             camera.lookAt(0, 0, 0);
 
-            // Ball
-            const ballGeo = new THREE.SphereGeometry(1.5, 16, 16);
-            const ballMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
-            puckMesh = new THREE.Mesh(ballGeo, ballMat);
-            puckMesh.position.y = 1.5;
+            // Puck
+            const puckGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.4, 16);
+            puckMesh = new THREE.Mesh(puckGeo, puckMat);
+            puckMesh.position.y = 0.2;
             scene.add(puckMesh);
-
-            document.querySelector('title').innerText = "Football Training 3D";
-            document.querySelector('h1').innerText = "Football Training Watcher";
         }
 
         function drawGame(state) {
@@ -399,36 +457,71 @@
             // Manage p1 objects
             if (state.p1_pos) {
                 while (p1Objects.length < state.p1_pos.length) {
-                    const player = createPlayer(team1Mat);
+                    const idx = p1Objects.length;
+                    const mat = idx === 0 ? team1GoalieMat : team1Mat;
+                    const player = createPlayer(mat);
                     scene.add(player);
                     p1Objects.push(player);
+
+                    const stick = createStick(constants.STICK_LENGTH);
+                    scene.add(stick);
+                    p1Sticks.push(stick);
                 }
 
                 state.p1_pos.forEach((pos, idx) => {
                     const px = pos[0] - w / 2;
                     const pz = pos[1] - h / 2;
                     p1Objects[idx].position.set(px, 0, pz);
+
+                    const stickAngle = state.p1_stick_angle[idx];
+                    p1Sticks[idx].position.set(px, 0, pz);
+                    p1Sticks[idx].rotation.y = -stickAngle;
                 });
             }
 
             // Manage p2 objects
             if (state.p2_pos) {
                 while (p2Objects.length < state.p2_pos.length) {
-                    const player = createPlayer(team2Mat);
+                    const idx = p2Objects.length;
+                    const mat = idx === 0 ? team2GoalieMat : team2Mat;
+                    const player = createPlayer(mat);
                     scene.add(player);
                     p2Objects.push(player);
+
+                    const stick = createStick(constants.STICK_LENGTH);
+                    scene.add(stick);
+                    p2Sticks.push(stick);
                 }
 
                 state.p2_pos.forEach((pos, idx) => {
                     const px = pos[0] - w / 2;
                     const pz = pos[1] - h / 2;
                     p2Objects[idx].position.set(px, 0, pz);
+
+                    const stickAngle = state.p2_stick_angle[idx];
+                    p2Sticks[idx].position.set(px, 0, pz);
+                    p2Sticks[idx].rotation.y = -stickAngle;
                 });
             }
 
-            if (state.ball_pos && puckMesh) {
-                puckMesh.position.x = state.ball_pos[0] - w / 2;
-                puckMesh.position.z = state.ball_pos[1] - h / 2;
+            // Manage ref objects
+            if (state.ref_pos) {
+                while (refObjects.length < state.ref_pos.length) {
+                    const ref = createPlayer(refMat);
+                    scene.add(ref);
+                    refObjects.push(ref);
+                }
+
+                state.ref_pos.forEach((pos, idx) => {
+                    const px = pos[0] - w / 2;
+                    const pz = pos[1] - h / 2;
+                    refObjects[idx].position.set(px, 0, pz);
+                });
+            }
+
+            if (state.puck_pos && puckMesh) {
+                puckMesh.position.x = state.puck_pos[0] - w / 2;
+                puckMesh.position.z = state.puck_pos[1] - h / 2;
             }
 
             if (state.score) {
@@ -472,6 +565,32 @@
             if (typeof controls !== 'undefined') controls.update();
 
             const now = Date.now();
+
+            p1Sticks.forEach((stick, idx) => {
+                if (!stick.userData.pivot) return;
+                const pivot = stick.userData.pivot;
+                let targetRotZ = 0;
+                let targetPosY = 2; // Default pivot pos
+                if (idx > 0 && now < t1CelebrateEnd) {
+                    targetRotZ = Math.PI;
+                    targetPosY = 4.5;
+                }
+                pivot.rotation.z = THREE.MathUtils.lerp(pivot.rotation.z, targetRotZ, 0.1);
+                pivot.position.y = THREE.MathUtils.lerp(pivot.position.y, targetPosY, 0.1);
+            });
+
+            p2Sticks.forEach((stick, idx) => {
+                if (!stick.userData.pivot) return;
+                const pivot = stick.userData.pivot;
+                let targetRotZ = 0;
+                let targetPosY = 2; // Default pivot pos
+                if (idx > 0 && now < t2CelebrateEnd) {
+                    targetRotZ = Math.PI;
+                    targetPosY = 4.5;
+                }
+                pivot.rotation.z = THREE.MathUtils.lerp(pivot.rotation.z, targetRotZ, 0.1);
+                pivot.position.y = THREE.MathUtils.lerp(pivot.position.y, targetPosY, 0.1);
+            });
 
             renderer.render(scene, camera);
         }

@@ -97,7 +97,7 @@
         const scoreElem = document.getElementById('score');
         const replayText = document.getElementById('replayText');
         const overlay = document.getElementById('overlay');
-        const goalHorn = new Audio('/goal_horn.mp3');
+        const goalHorn = new Audio('goal_horn.mp3');
         let wasReplay = false;
 
         overlay.addEventListener('click', () => {
@@ -136,11 +136,11 @@
 
         btnExport.addEventListener('click', async () => {
             try {
-                const archResponse = await fetch('/export_architecture');
+                const archResponse = await fetch('export_architecture');
                 const archData = await archResponse.json();
                 downloadObjectAsJson(archData, "architecture");
 
-                const weightsResponse = await fetch('/export_weights');
+                const weightsResponse = await fetch('export_weights');
                 const weightsData = await weightsResponse.json();
                 downloadObjectAsJson(weightsData, "weights");
             } catch (e) {
@@ -172,7 +172,7 @@
 
             Promise.all([readArch, readWeights]).then(async ([architecture, weights]) => {
                 try {
-                    const response = await fetch('/upload_model', {
+                    const response = await fetch('upload_model', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
@@ -537,7 +537,7 @@
 
         async function fetchConstants() {
             try {
-                const response = await fetch('/constants');
+                const response = await fetch('constants');
                 constants = await response.json();
                 initScene();
                 fetchState();
@@ -549,7 +549,7 @@
 
         async function fetchState() {
             try {
-                const response = await fetch('/state');
+                const response = await fetch('state');
                 const state = await response.json();
                 drawGame(state);
             } catch (e) {
