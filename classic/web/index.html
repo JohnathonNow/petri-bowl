@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Hockey Training 3D</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #e0f7fa;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #scoreContainer {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            z-index: 100;
+            pointer-events: none;
+        }
+
+        h1,
+        h2 {
+            margin: 0;
+            color: #333;
+            font-family: sans-serif;
+            text-shadow: 1px 1px 2px white;
+        }
+
+        #modelControls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: sans-serif;
+            z-index: 100;
+        }
+
+        #modelControls button {
+            margin-top: 5px;
+        }
+
+        #modelControls div {
+            margin-bottom: 5px;
+        }
+    </style>
+    <!-- Include Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+
+<body>
+    <div id="scoreContainer">
+        <h1>Hockey Training Watcher</h1>
+        <h2 id="score">Score: 0 - 0</h2>
+        <h2 id="replayText" style="display: none; color: red; animation: blink 1s linear infinite;">REPLAY</h2>
+    </div>
+    <div id="modelControls">
+        <details>
+            <summary style="cursor: pointer;"><h3>Model Controls</h3></summary>
+            <div>
+                <button id="btnExport">Export Current Model</button>
+            </div>
+            <hr>
+            <div>
+                <label>Architecture JSON:</label><br>
+                <input type="file" id="archInput" accept=".json">
+            </div>
+            <div>
+                <label>Weights JSON:</label><br>
+                <input type="file" id="weightsInput" accept=".json">
+            </div>
+            <button id="btnUpload">Upload Model</button>
+        </details>
+    </div>
+
+    <div id="overlay"
+        style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); color: white; display: flex; align-items: center; justify-content: center; font-family: sans-serif; font-size: 24px; cursor: pointer; z-index: 200;">
+        Click to Start Watching
+    </div>
+
+    <style>
+        @keyframes blink {
+            50% {
+                opacity: 0;
+            }
+        }
+    </style>
+
+    <script>
+        const scoreElem = document.getElementById('score');
+        const replayText = document.getElementById('replayText');
+        const overlay = document.getElementById('overlay');
+        const goalHorn = new Audio('/goal_horn.mp3');
+        let wasReplay = false;
+
+        overlay.addEventListener('click', () => {
+            overlay.style.display = 'none';
+            // Play and immediately pause to unlock audio context
+            goalHorn.play().then(() => {
+                goalHorn.pause();
+                goalHorn.currentTime = 0;
+            }).catch(e => console.error("Audio unlock error:", e));
+        });
+
+        // Setup Three.js scene
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xe0f7fa);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const btnExport = document.getElementById('btnExport');
+        const btnUpload = document.getElementById('btnUpload');
+        const archInput = document.getElementById('archInput');
+        const weightsInput = document.getElementById('weightsInput');
+
+        function downloadObjectAsJson(exportObj, exportName) {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObj));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", exportName + ".json");
+            document.body.appendChild(downloadAnchorNode); // required for firefox
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+
+        btnExport.addEventListener('click', async () => {
+            try {
+                const archResponse = await fetch('/export_architecture');
+                const archData = await archResponse.json();
+                downloadObjectAsJson(archData, "architecture");
+
+                const weightsResponse = await fetch('/export_weights');
+                const weightsData = await weightsResponse.json();
+                downloadObjectAsJson(weightsData, "weights");
+            } catch (e) {
+                console.error("Export error:", e);
+                alert("Failed to export model");
+            }
+        });
+
+        btnUpload.addEventListener('click', () => {
+            const archFile = archInput.files[0];
+            const weightsFile = weightsInput.files[0];
+
+            if (!archFile || !weightsFile) {
+                alert("Please select both architecture and weights JSON files.");
+                return;
+            }
+
+            const readArch = new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = e => resolve(JSON.parse(e.target.result));
+                reader.readAsText(archFile);
+            });
+
+            const readWeights = new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = e => resolve(JSON.parse(e.target.result));
+                reader.readAsText(weightsFile);
+            });
+
+            Promise.all([readArch, readWeights]).then(async ([architecture, weights]) => {
+                try {
+                    const response = await fetch('/upload_model', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ architecture, weights })
+                    });
+                    const result = await response.json();
+                    if (result.status === 'success') {
+                        alert("Model uploaded successfully!");
+                        // Re-fetch constants in case architecture changed dimensions
+                        fetchConstants();
+                    } else {
+                        alert("Error uploading: " + result.message);
+                    }
+                } catch (e) {
+                    console.error("Upload error:", e);
+                    alert("Failed to upload model");
+                }
+            }).catch(e => {
+                console.error("File read error:", e);
+                alert("Failed to parse JSON files");
+            });
+        });
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        directionalLight.position.set(50, 100, 50);
+        scene.add(directionalLight);
+
+        let constants = null;
+
+        // Materials
+        const team1Color = 0x0000ff;
+        const team1GoalieColor = 0x00008b; // dark blue
+        const team2Color = 0xff0000;
+        const team2GoalieColor = 0x8b0000; // dark red
+
+        const team1Mat = new THREE.MeshStandardMaterial({ color: team1Color });
+        const team1GoalieMat = new THREE.MeshStandardMaterial({ color: team1GoalieColor });
+        const team2Mat = new THREE.MeshStandardMaterial({ color: team2Color });
+        const team2GoalieMat = new THREE.MeshStandardMaterial({ color: team2GoalieColor });
+        const stickMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+        const puckMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
+        const goalMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
+        const refMat = new THREE.MeshStandardMaterial({ color: 0x888888 }); // Grey for refs
+
+        // Objects
+        let p1Objects = [];
+        let p2Objects = [];
+        let p1Sticks = [];
+        let p2Sticks = [];
+        let refObjects = [];
+        let puckMesh = null;
+
+        let currentScore = [0, 0];
+        let t1CelebrateEnd = 0;
+        let t2CelebrateEnd = 0;
+
+        function createPlayer(material) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 32;
+            canvas.height = 32;
+            const ctx = canvas.getContext('2d');
+
+            // Extract color from material
+            let colorStr = '#ffffff'; // Default
+            if (material.color) {
+                colorStr = '#' + material.color.getHexString();
+            }
+
+            // Draw an 8-bit style sprite
+            // Base shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillRect(8, 28, 16, 4);
+
+            // Body
+            ctx.fillStyle = colorStr;
+            ctx.fillRect(10, 14, 12, 14);
+
+            // Head
+            ctx.fillStyle = '#ffccaa'; // Skin tone
+            ctx.fillRect(12, 6, 8, 8);
+
+            // Eyes
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(14, 8, 2, 2);
+            ctx.fillRect(18, 8, 2, 2);
+
+            // Helmet/Hair (match team color)
+            ctx.fillStyle = colorStr;
+            ctx.fillRect(10, 4, 12, 4);
+            ctx.fillRect(10, 4, 4, 8);
+            ctx.fillRect(20, 4, 2, 8);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            // Disable filtering for pixelated 8-bit look
+            texture.magFilter = THREE.NearestFilter;
+            texture.minFilter = THREE.NearestFilter;
+
+            const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+            const sprite = new THREE.Sprite(spriteMaterial);
+
+            // Scale the sprite appropriately
+            sprite.scale.set(6, 6, 1);
+            sprite.position.y = 3;
+
+            return sprite;
+        }
+
+        function createStick(stickLength) {
+            const outerGroup = new THREE.Group();
+            const pivotGroup = new THREE.Group();
+
+            // Hand is roughly at y=2
+            pivotGroup.position.y = 2;
+            outerGroup.add(pivotGroup);
+            outerGroup.userData.pivot = pivotGroup;
+
+            const dropY = 1.8; // Drops from y=2 to y=0.2
+            const shaftLen = Math.sqrt(stickLength * stickLength + dropY * dropY);
+            const angleZ = Math.atan2(-dropY, stickLength);
+
+            // Shaft
+            const shaftGeo = new THREE.BoxGeometry(shaftLen, 0.15, 0.15);
+            const shaft = new THREE.Mesh(shaftGeo, stickMat);
+            // Center of the shaft
+            shaft.position.set(stickLength / 2, -dropY / 2, 0);
+            shaft.rotation.z = angleZ;
+            pivotGroup.add(shaft);
+
+            // Blade
+            const bladeGeo = new THREE.BoxGeometry(0.8, 0.3, 0.1);
+            // Shift the geometry so its origin is at the heel (end of the blade)
+            bladeGeo.translate(0.4, 0, 0);
+            const blade = new THREE.Mesh(bladeGeo, stickMat);
+            // Positioned at the end of the shaft
+            blade.position.set(stickLength, -dropY, 0);
+            blade.rotation.y = -Math.PI / 4;
+            pivotGroup.add(blade);
+
+            return outerGroup;
+        }
+
+        function createGoalFrame(w, h, d, material) {
+            const group = new THREE.Group();
+            const thickness = 0.4;
+
+            // Front posts (facing +x)
+            const postGeo = new THREE.BoxGeometry(thickness, h, thickness);
+            const post1 = new THREE.Mesh(postGeo, material);
+            post1.position.set(w / 2 - thickness / 2, h / 2, d / 2 - thickness / 2);
+            group.add(post1);
+
+            const post2 = new THREE.Mesh(postGeo, material);
+            post2.position.set(w / 2 - thickness / 2, h / 2, -d / 2 + thickness / 2);
+            group.add(post2);
+
+            // Crossbar
+            const crossbarGeo = new THREE.BoxGeometry(thickness, thickness, d);
+            const crossbar = new THREE.Mesh(crossbarGeo, material);
+            crossbar.position.set(w / 2 - thickness / 2, h - thickness / 2, 0);
+            group.add(crossbar);
+
+            // Base sides (bottom)
+            const baseSideGeo = new THREE.BoxGeometry(w, thickness, thickness);
+            const base1 = new THREE.Mesh(baseSideGeo, material);
+            base1.position.set(0, thickness / 2, d / 2 - thickness / 2);
+            group.add(base1);
+
+            const base2 = new THREE.Mesh(baseSideGeo, material);
+            base2.position.set(0, thickness / 2, -d / 2 + thickness / 2);
+            group.add(base2);
+
+            // Base back
+            const baseBackGeo = new THREE.BoxGeometry(thickness, thickness, d - thickness * 2);
+            const base3 = new THREE.Mesh(baseBackGeo, material);
+            base3.position.set(-w / 2 + thickness / 2, thickness / 2, 0);
+            group.add(base3);
+
+            // Diagonal supports (from back bottom corner to front top corner)
+            const diagLen = Math.sqrt(w * w + h * h);
+            const diagGeo = new THREE.BoxGeometry(diagLen, thickness, thickness);
+            const angle = Math.atan2(h, w);
+
+            const diag1 = new THREE.Mesh(diagGeo, material);
+            diag1.rotation.z = angle;
+            diag1.position.set(0, h / 2, d / 2 - thickness / 2);
+            group.add(diag1);
+
+            const diag2 = new THREE.Mesh(diagGeo, material);
+            diag2.rotation.z = angle;
+            diag2.position.set(0, h / 2, -d / 2 + thickness / 2);
+            group.add(diag2);
+
+            return group;
+        }
+
+        function initScene() {
+            // Rink
+            const rinkShape = new THREE.Shape();
+            const w = constants.WIDTH;
+            const h = constants.HEIGHT;
+            const r = constants.BOUNDS_RADIUS;
+
+            rinkShape.moveTo(r, 0);
+            rinkShape.lineTo(w - r, 0);
+            rinkShape.absarc(w - r, r, r, -Math.PI / 2, 0, false);
+            rinkShape.lineTo(w, h - r);
+            rinkShape.absarc(w - r, h - r, r, 0, Math.PI / 2, false);
+            rinkShape.lineTo(r, h);
+            rinkShape.absarc(r, h - r, r, Math.PI / 2, Math.PI, false);
+            rinkShape.lineTo(0, r);
+            rinkShape.absarc(r, r, r, Math.PI, Math.PI * 1.5, false);
+
+            const rinkGeo = new THREE.ShapeGeometry(rinkShape);
+            const rinkMat = new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+            const rink = new THREE.Mesh(rinkGeo, rinkMat);
+            rink.rotation.x = -Math.PI / 2;
+            // Center the rink roughly around 0,0
+            rink.position.set(-w / 2, 0, h / 2);
+            scene.add(rink);
+
+            // Lines
+            const centerLineMat = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 2 });
+            const centerPoints = [];
+            centerPoints.push(new THREE.Vector3(0, 0.01, -h / 2));
+            centerPoints.push(new THREE.Vector3(0, 0.01, h / 2));
+            const centerLineGeo = new THREE.BufferGeometry().setFromPoints(centerPoints);
+            const centerLine = new THREE.Line(centerLineGeo, centerLineMat);
+            scene.add(centerLine);
+
+            const blueLineMat = new THREE.LineBasicMaterial({ color: 0x0000ff });
+            const bLine1Points = [];
+            bLine1Points.push(new THREE.Vector3(-12.5, 0.01, -h / 2));
+            bLine1Points.push(new THREE.Vector3(-12.5, 0.01, h / 2));
+            const bLine1Geo = new THREE.BufferGeometry().setFromPoints(bLine1Points);
+            const blueLine1 = new THREE.Line(bLine1Geo, blueLineMat);
+            scene.add(blueLine1);
+
+            const bLine2Points = [];
+            bLine2Points.push(new THREE.Vector3(12.5, 0.01, -h / 2));
+            bLine2Points.push(new THREE.Vector3(12.5, 0.01, h / 2));
+            const bLine2Geo = new THREE.BufferGeometry().setFromPoints(bLine2Points);
+            const blueLine2 = new THREE.Line(bLine2Geo, blueLineMat);
+            scene.add(blueLine2);
+
+            const goalLineMat = new THREE.LineBasicMaterial({ color: 0xff0000 });
+            const gl1Points = [];
+            gl1Points.push(new THREE.Vector3(constants.GOAL_X_1 - w / 2, 0.01, -24.14));
+            gl1Points.push(new THREE.Vector3(constants.GOAL_X_1 - w / 2, 0.01, 24.14));
+            const gl1Geo = new THREE.BufferGeometry().setFromPoints(gl1Points);
+            const goalLine1 = new THREE.Line(gl1Geo, goalLineMat);
+            scene.add(goalLine1);
+
+            const gl2Points = [];
+            gl2Points.push(new THREE.Vector3(constants.GOAL_X_2 - w / 2, 0.01, -24.14));
+            gl2Points.push(new THREE.Vector3(constants.GOAL_X_2 - w / 2, 0.01, 24.14));
+            const gl2Geo = new THREE.BufferGeometry().setFromPoints(gl2Points);
+            const goalLine2 = new THREE.Line(gl2Geo, goalLineMat);
+            scene.add(goalLine2);
+
+            // Goal Creases
+            const creaseGeo = new THREE.CircleGeometry(4, 32, 0, Math.PI);
+            const creaseMat = new THREE.MeshBasicMaterial({ color: 0xadd8e6, side: THREE.DoubleSide });
+
+            const crease1 = new THREE.Mesh(creaseGeo, creaseMat);
+            crease1.rotation.x = -Math.PI / 2;
+            crease1.rotation.z = -Math.PI / 2;
+            crease1.position.set(constants.GOAL_X_1 - w / 2, 0.02, 0);
+            scene.add(crease1);
+
+            const crease2 = new THREE.Mesh(creaseGeo, creaseMat);
+            crease2.rotation.x = -Math.PI / 2;
+            crease2.rotation.z = Math.PI / 2;
+            crease2.position.set(constants.GOAL_X_2 - w / 2, 0.02, 0);
+            scene.add(crease2);
+
+            // Goals
+            const goalW = 4;
+            const goalH = 4;
+            const goalD = constants.GOAL_Y_MAX - constants.GOAL_Y_MIN;
+            const goalColorMat = new THREE.MeshStandardMaterial({ color: 0xcc0000 }); // red goal frame
+
+            const goal1 = createGoalFrame(goalW, goalH, goalD, goalColorMat);
+            // Face right
+            goal1.position.set(constants.GOAL_X_1 - w / 2 - goalW / 2, 0, (constants.GOAL_Y_MIN + constants.GOAL_Y_MAX) / 2 - h / 2);
+            scene.add(goal1);
+
+            const goal2 = createGoalFrame(goalW, goalH, goalD, goalColorMat);
+            // Face left (rotate 180 degrees)
+            goal2.rotation.y = Math.PI;
+            goal2.position.set(constants.GOAL_X_2 - w / 2 + goalW / 2, 0, (constants.GOAL_Y_MIN + constants.GOAL_Y_MAX) / 2 - h / 2);
+            scene.add(goal2);
+
+            // Camera positioning
+            camera.position.set(0, 60, 40);
+            camera.lookAt(0, 0, 0);
+
+            // Puck Sprite
+            const puckCanvas = document.createElement('canvas');
+            puckCanvas.width = 16;
+            puckCanvas.height = 16;
+            const puckCtx = puckCanvas.getContext('2d');
+
+            puckCtx.fillStyle = '#000000';
+            puckCtx.fillRect(4, 6, 8, 4);
+            puckCtx.fillStyle = '#333333';
+            puckCtx.fillRect(5, 5, 6, 1);
+            puckCtx.fillStyle = '#111111';
+            puckCtx.fillRect(5, 10, 6, 1);
+
+            const puckTexture = new THREE.CanvasTexture(puckCanvas);
+            puckTexture.magFilter = THREE.NearestFilter;
+            puckTexture.minFilter = THREE.NearestFilter;
+
+            const puckSpriteMat = new THREE.SpriteMaterial({ map: puckTexture });
+            puckMesh = new THREE.Sprite(puckSpriteMat);
+            puckMesh.scale.set(2, 2, 1);
+            puckMesh.position.y = 1;
+            scene.add(puckMesh);
+        }
+
+        function drawGame(state) {
+            if (!constants || !state) return;
+            const w = constants.WIDTH;
+            const h = constants.HEIGHT;
+
+            // Manage p1 objects
+            if (state.p1_pos) {
+                while (p1Objects.length < state.p1_pos.length) {
+                    const idx = p1Objects.length;
+                    const mat = idx === 0 ? team1GoalieMat : team1Mat;
+                    const player = createPlayer(mat);
+                    scene.add(player);
+                    p1Objects.push(player);
+
+                    const stick = createStick(constants.STICK_LENGTH);
+                    scene.add(stick);
+                    p1Sticks.push(stick);
+                }
+
+                state.p1_pos.forEach((pos, idx) => {
+                    const px = pos[0] - w / 2;
+                    const pz = pos[1] - h / 2;
+                    p1Objects[idx].position.set(px, 0, pz);
+
+                    const stickAngle = state.p1_stick_angle[idx];
+                    p1Sticks[idx].position.set(px, 0, pz);
+                    p1Sticks[idx].rotation.y = -stickAngle;
+                });
+            }
+
+            // Manage p2 objects
+            if (state.p2_pos) {
+                while (p2Objects.length < state.p2_pos.length) {
+                    const idx = p2Objects.length;
+                    const mat = idx === 0 ? team2GoalieMat : team2Mat;
+                    const player = createPlayer(mat);
+                    scene.add(player);
+                    p2Objects.push(player);
+
+                    const stick = createStick(constants.STICK_LENGTH);
+                    scene.add(stick);
+                    p2Sticks.push(stick);
+                }
+
+                state.p2_pos.forEach((pos, idx) => {
+                    const px = pos[0] - w / 2;
+                    const pz = pos[1] - h / 2;
+                    p2Objects[idx].position.set(px, 0, pz);
+
+                    const stickAngle = state.p2_stick_angle[idx];
+                    p2Sticks[idx].position.set(px, 0, pz);
+                    p2Sticks[idx].rotation.y = -stickAngle;
+                });
+            }
+
+            // Manage ref objects
+            if (state.ref_pos) {
+                while (refObjects.length < state.ref_pos.length) {
+                    const ref = createPlayer(refMat);
+                    scene.add(ref);
+                    refObjects.push(ref);
+                }
+
+                state.ref_pos.forEach((pos, idx) => {
+                    const px = pos[0] - w / 2;
+                    const pz = pos[1] - h / 2;
+                    refObjects[idx].position.set(px, 0, pz);
+                });
+            }
+
+            if (state.puck_pos && puckMesh) {
+                puckMesh.position.x = state.puck_pos[0] - w / 2;
+                puckMesh.position.z = state.puck_pos[1] - h / 2;
+            }
+
+            if (state.score) {
+                scoreElem.innerText = `Score: ${state.score[0]} - ${state.score[1]}`;
+                if (state.score[0] > currentScore[0]) {
+                    t1CelebrateEnd = Date.now() + 3000;
+                }
+                if (state.score[1] > currentScore[1]) {
+                    t2CelebrateEnd = Date.now() + 3000;
+                }
+                currentScore[0] = state.score[0];
+                currentScore[1] = state.score[1];
+            }
+
+            if (state.is_replay) {
+                if (!wasReplay) {
+                    replayText.style.display = 'block';
+                }
+                wasReplay = true;
+            } else {
+                if (wasReplay) {
+                    replayText.style.display = 'none';
+                }
+                wasReplay = false;
+            }
+
+            if (state.play_horn) {
+                // If it's paused or reached the end, play it
+                if (goalHorn.paused) {
+                    goalHorn.currentTime = 0;
+                    goalHorn.play().catch(e => console.error("Horn play error:", e));
+
+                }
+            }
+
+        }
+
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (typeof controls !== 'undefined') controls.update();
+
+            const now = Date.now();
+
+            p1Sticks.forEach((stick, idx) => {
+                if (!stick.userData.pivot) return;
+                const pivot = stick.userData.pivot;
+                let targetRotZ = 0;
+                let targetPosY = 2; // Default pivot pos
+                if (idx > 0 && now < t1CelebrateEnd) {
+                    targetRotZ = Math.PI;
+                    targetPosY = 4.5;
+                }
+                pivot.rotation.z = THREE.MathUtils.lerp(pivot.rotation.z, targetRotZ, 0.1);
+                pivot.position.y = THREE.MathUtils.lerp(pivot.position.y, targetPosY, 0.1);
+            });
+
+            p2Sticks.forEach((stick, idx) => {
+                if (!stick.userData.pivot) return;
+                const pivot = stick.userData.pivot;
+                let targetRotZ = 0;
+                let targetPosY = 2; // Default pivot pos
+                if (idx > 0 && now < t2CelebrateEnd) {
+                    targetRotZ = Math.PI;
+                    targetPosY = 4.5;
+                }
+                pivot.rotation.z = THREE.MathUtils.lerp(pivot.rotation.z, targetRotZ, 0.1);
+                pivot.position.y = THREE.MathUtils.lerp(pivot.position.y, targetPosY, 0.1);
+            });
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        async function fetchConstants() {
+            try {
+                const response = await fetch('/constants');
+                constants = await response.json();
+                initScene();
+                fetchState();
+            } catch (e) {
+                console.error("Error fetching constants:", e);
+                setTimeout(fetchConstants, 1000);
+            }
+        }
+
+        async function fetchState() {
+            try {
+                const response = await fetch('/state');
+                const state = await response.json();
+                drawGame(state);
+            } catch (e) {
+                console.error("Error fetching state:", e);
+            }
+            setTimeout(fetchState, 50);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        fetchConstants();
+    </script>
+</body>
+
+</html>
