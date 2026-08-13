@@ -53,6 +53,11 @@
     <!-- Include Three.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+    <script src="constants.js"></script>
+    <script src="hockey_env.js"></script>
+    <script src="agent.js"></script>
+    <script src="train.js"></script>
 </head>
 
 <body>
@@ -136,12 +141,31 @@
 
         btnExport.addEventListener('click', async () => {
             try {
-                const archResponse = await fetch('export_architecture');
-                const archData = await archResponse.json();
+                const archData = {
+                    "INPUT_SIZE": CONSTANTS.NET_INPUT,
+                    "HIDDEN_SIZE_1": CONSTANTS.NET_HIDDEN1,
+                    "HIDDEN_SIZE_2": CONSTANTS.NET_HIDDEN2,
+                    "OUTPUT_SIZE_MOVE": CONSTANTS.NET_OUT_MOVE,
+                    "OUTPUT_SIZE_STICK": CONSTANTS.NET_OUT_STICK
+                };
                 downloadObjectAsJson(archData, "architecture");
 
-                const weightsResponse = await fetch('export_weights');
-                const weightsData = await weightsResponse.json();
+                if (!team1 || !team1.agents.length) {
+                    alert("Training hasn't started or model unavailable");
+                    return;
+                }
+
+                // Get weights from the first agent on team 1
+                const weightsArray = team1.agents[0].net.getWeights();
+
+                // In Python the export was just a JSON dictionary with keys matching the state_dict
+                // For TFJS it's just a raw dump array unless we format it exactly the same.
+                // Because python script isn't using it anymore, raw dump array of Arrays is fine for internal loop
+                const weightsData = {};
+                weightsArray.forEach((t, idx) => {
+                    weightsData["layer_" + idx] = t.arraySync();
+                });
+
                 downloadObjectAsJson(weightsData, "weights");
             } catch (e) {
                 console.error("Export error:", e);
@@ -172,21 +196,37 @@
 
             Promise.all([readArch, readWeights]).then(async ([architecture, weights]) => {
                 try {
-                    const response = await fetch('upload_model', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ architecture, weights })
+                    // Apply architecture overrides
+                    if (architecture.INPUT_SIZE) CONSTANTS.NET_INPUT = architecture.INPUT_SIZE;
+                    if (architecture.HIDDEN_SIZE_1) CONSTANTS.NET_HIDDEN1 = architecture.HIDDEN_SIZE_1;
+                    if (architecture.HIDDEN_SIZE_2) CONSTANTS.NET_HIDDEN2 = architecture.HIDDEN_SIZE_2;
+                    if (architecture.OUTPUT_SIZE_MOVE) CONSTANTS.NET_OUT_MOVE = architecture.OUTPUT_SIZE_MOVE;
+                    if (architecture.OUTPUT_SIZE_STICK) CONSTANTS.NET_OUT_STICK = architecture.OUTPUT_SIZE_STICK;
+
+                    // Rebuild agents for both teams with new architecture
+                    const teams = [team1, team2];
+                    teams.forEach(team => {
+                        team.agents.forEach(agent => {
+                            agent.net = new PlayerNet();
+                            agent.opt = tf.train.adam(CONSTANTS.LR);
+
+                            // Load weights
+                            const currentWeights = agent.net.getWeights();
+                            const newWeights = [];
+
+                            currentWeights.forEach((t, idx) => {
+                                const key = "layer_" + idx;
+                                if (weights[key]) {
+                                    newWeights.push(tf.tensor(weights[key]));
+                                } else {
+                                    newWeights.push(t);
+                                }
+                            });
+                            agent.net.setWeights(newWeights);
+                        });
                     });
-                    const result = await response.json();
-                    if (result.status === 'success') {
-                        alert("Model uploaded successfully!");
-                        // Re-fetch constants in case architecture changed dimensions
-                        fetchConstants();
-                    } else {
-                        alert("Error uploading: " + result.message);
-                    }
+
+                    alert("Model uploaded and applied successfully!");
                 } catch (e) {
                     console.error("Upload error:", e);
                     alert("Failed to upload model");
@@ -206,7 +246,7 @@
         directionalLight.position.set(50, 100, 50);
         scene.add(directionalLight);
 
-        let constants = null;
+        let constants = CONSTANTS;
 
         // Materials
         const team1Color = 0x0000ff;
@@ -596,28 +636,7 @@
         }
         animate();
 
-        async function fetchConstants() {
-            try {
-                const response = await fetch('constants');
-                constants = await response.json();
-                initScene();
-                fetchState();
-            } catch (e) {
-                console.error("Error fetching constants:", e);
-                setTimeout(fetchConstants, 1000);
-            }
-        }
 
-        async function fetchState() {
-            try {
-                const response = await fetch('state');
-                const state = await response.json();
-                drawGame(state);
-            } catch (e) {
-                console.error("Error fetching state:", e);
-            }
-            setTimeout(fetchState, 50);
-        }
 
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
@@ -625,7 +644,11 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        fetchConstants();
+        initScene();
+        // Wait for overlay click to start training
+        overlay.addEventListener('click', () => {
+            train();
+        });
     </script>
 </body>
 
