@@ -78,7 +78,7 @@ async function runPretrainPhase() {
             const done = env.step(actions1, actions2);
 
             // Periodically draw so it doesn't just sit on a blank screen
-            if (step % 50 === 0) {
+            if (step % 1 === 0) {
                 if (typeof drawGame === 'function') {
                     drawGame(env.history[env.history.length - 1]);
                 }
