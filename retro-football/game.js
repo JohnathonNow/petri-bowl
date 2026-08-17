@@ -188,38 +188,38 @@ function setupPreSnap() {
 
     // Offense (11 players)
     // 5 OL
-    players.push({ id: 0, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2, role: 'ol', team: 'offense', targetX: null, targetY: null, diving: false }); // C
-    players.push({ id: 1, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 - 20, role: 'ol', team: 'offense', targetX: null, targetY: null, diving: false }); // LG
-    players.push({ id: 2, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 + 20, role: 'ol', team: 'offense', targetX: null, targetY: null, diving: false }); // RG
-    players.push({ id: 3, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 - 40, role: 'ol', team: 'offense', targetX: null, targetY: null, diving: false }); // LT
-    players.push({ id: 4, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 + 40, role: 'ol', team: 'offense', targetX: null, targetY: null, diving: false }); // RT
+    players.push({ id: 0, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2, role: 'ol', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 }); // C
+    players.push({ id: 1, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 - 20, role: 'ol', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 }); // LG
+    players.push({ id: 2, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 + 20, role: 'ol', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 }); // RG
+    players.push({ id: 3, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 - 40, role: 'ol', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 }); // LT
+    players.push({ id: 4, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 + 40, role: 'ol', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 }); // RT
     // QB
-    players.push({ id: 5, x: lineOfScrimmage + offDir * 30, y: GAME_HEIGHT/2, role: 'qb', team: 'offense', targetX: null, targetY: null, diving: false });
+    players.push({ id: 5, x: lineOfScrimmage + offDir * 30, y: GAME_HEIGHT/2, role: 'qb', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
     // RB
-    players.push({ id: 6, x: lineOfScrimmage + offDir * 60, y: GAME_HEIGHT/2, role: 'rb', team: 'offense', targetX: null, targetY: null, diving: false });
+    players.push({ id: 6, x: lineOfScrimmage + offDir * 60, y: GAME_HEIGHT/2, role: 'rb', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
     // TE
-    players.push({ id: 7, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 + 60, role: 'te', team: 'offense', targetX: null, targetY: null, diving: false });
+    players.push({ id: 7, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 + 60, role: 'te', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
     // WRs
-    players.push({ id: 8, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 - 120, role: 'wr', team: 'offense', targetX: lineOfScrimmage + defDir * 150, targetY: GAME_HEIGHT/2 - 120, diving: false });
-    players.push({ id: 9, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 + 120, role: 'wr', team: 'offense', targetX: lineOfScrimmage + defDir * 150, targetY: GAME_HEIGHT/2 + 120, diving: false });
-    players.push({ id: 10, x: lineOfScrimmage + offDir * 20, y: GAME_HEIGHT/2 - 80, role: 'wr', team: 'offense', targetX: lineOfScrimmage + defDir * 150, targetY: GAME_HEIGHT/2 - 80, diving: false });
+    players.push({ id: 8, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 - 120, role: 'wr', team: 'offense', targetX: lineOfScrimmage + defDir * 150, targetY: GAME_HEIGHT/2 - 120, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+    players.push({ id: 9, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 + 120, role: 'wr', team: 'offense', targetX: lineOfScrimmage + defDir * 150, targetY: GAME_HEIGHT/2 + 120, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+    players.push({ id: 10, x: lineOfScrimmage + offDir * 20, y: GAME_HEIGHT/2 - 80, role: 'wr', team: 'offense', targetX: lineOfScrimmage + defDir * 150, targetY: GAME_HEIGHT/2 - 80, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
 
     // Defense (11 players)
     // 4 DL
-    players.push({ id: 11, x: lineOfScrimmage + defDir * 10, y: GAME_HEIGHT/2 - 15, role: 'dl', team: 'defense', targetX: null, targetY: null, diving: false });
-    players.push({ id: 12, x: lineOfScrimmage + defDir * 10, y: GAME_HEIGHT/2 + 15, role: 'dl', team: 'defense', targetX: null, targetY: null, diving: false });
-    players.push({ id: 13, x: lineOfScrimmage + defDir * 10, y: GAME_HEIGHT/2 - 45, role: 'dl', team: 'defense', targetX: null, targetY: null, diving: false });
-    players.push({ id: 14, x: lineOfScrimmage + defDir * 10, y: GAME_HEIGHT/2 + 45, role: 'dl', team: 'defense', targetX: null, targetY: null, diving: false });
+    players.push({ id: 11, x: lineOfScrimmage + defDir * 10, y: GAME_HEIGHT/2 - 15, role: 'dl', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+    players.push({ id: 12, x: lineOfScrimmage + defDir * 10, y: GAME_HEIGHT/2 + 15, role: 'dl', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+    players.push({ id: 13, x: lineOfScrimmage + defDir * 10, y: GAME_HEIGHT/2 - 45, role: 'dl', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+    players.push({ id: 14, x: lineOfScrimmage + defDir * 10, y: GAME_HEIGHT/2 + 45, role: 'dl', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
     // 3 LB
-    players.push({ id: 15, x: lineOfScrimmage + defDir * 40, y: GAME_HEIGHT/2, role: 'lb', team: 'defense', targetX: null, targetY: null, diving: false });
-    players.push({ id: 16, x: lineOfScrimmage + defDir * 40, y: GAME_HEIGHT/2 - 30, role: 'lb', team: 'defense', targetX: null, targetY: null, diving: false });
-    players.push({ id: 17, x: lineOfScrimmage + defDir * 40, y: GAME_HEIGHT/2 + 30, role: 'lb', team: 'defense', targetX: null, targetY: null, diving: false });
+    players.push({ id: 15, x: lineOfScrimmage + defDir * 40, y: GAME_HEIGHT/2, role: 'lb', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+    players.push({ id: 16, x: lineOfScrimmage + defDir * 40, y: GAME_HEIGHT/2 - 30, role: 'lb', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+    players.push({ id: 17, x: lineOfScrimmage + defDir * 40, y: GAME_HEIGHT/2 + 30, role: 'lb', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
     // 2 CB
-    players.push({ id: 18, x: lineOfScrimmage + defDir * 20, y: GAME_HEIGHT/2 - 120, role: 'cb', team: 'defense', targetX: null, targetY: null, diving: false });
-    players.push({ id: 19, x: lineOfScrimmage + defDir * 20, y: GAME_HEIGHT/2 + 120, role: 'cb', team: 'defense', targetX: null, targetY: null, diving: false });
+    players.push({ id: 18, x: lineOfScrimmage + defDir * 20, y: GAME_HEIGHT/2 - 120, role: 'cb', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+    players.push({ id: 19, x: lineOfScrimmage + defDir * 20, y: GAME_HEIGHT/2 + 120, role: 'cb', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
     // 2 S
-    players.push({ id: 20, x: lineOfScrimmage + defDir * 100, y: GAME_HEIGHT/2 - 40, role: 'safety', team: 'defense', targetX: null, targetY: null, diving: false });
-    players.push({ id: 21, x: lineOfScrimmage + defDir * 100, y: GAME_HEIGHT/2 + 40, role: 'safety', team: 'defense', targetX: null, targetY: null, diving: false });
+    players.push({ id: 20, x: lineOfScrimmage + defDir * 100, y: GAME_HEIGHT/2 - 40, role: 'safety', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+    players.push({ id: 21, x: lineOfScrimmage + defDir * 100, y: GAME_HEIGHT/2 + 40, role: 'safety', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
 
     if (currentTeam === 'offense') {
         activePlayerIndex = 5; // Control QB
@@ -389,6 +389,33 @@ function updatePlayers() {
     let defDir = movingRight ? -1 : 1;
 
     players.forEach((p, idx) => {
+        // Block breaking and stun logic
+        if (p.stunTimer > 0) {
+            p.stunTimer--;
+            return; // Cannot move while stunned
+        }
+
+        if (p.blockedBy) {
+            p.blockTimer++;
+            // Check for block break every half second (approx 30 frames at 60fps)
+            if (p.blockTimer >= 30) {
+                p.blockTimer = 0;
+
+                // Calculate break chance based on strength vs blocking
+                let breakChance = 10 + (p.strength - p.blockedBy.blocking);
+                // Clamp between 5% and 95%
+                breakChance = Math.max(5, Math.min(95, breakChance));
+
+                if (Math.random() * 100 < breakChance) {
+                    // Block broken
+                    p.blockedBy.stunTimer = 60; // Stun blocker for 1 second
+                    p.blockedBy.blockingTarget = null;
+                    p.blockedBy = null;
+                }
+            }
+            return; // Cannot move while blocked
+        }
+
         let speed = p.diving ? 3 : 1.5;
 
         // Basic AI for non-active players
@@ -403,12 +430,60 @@ function updatePlayers() {
                     p.targetX += offDir * 50;
                 }
             } else if (p.role === 'ol') {
-                // Block slightly forward
-                if (p.targetX === null) {
-                    p.targetX = p.x + offDir * 5;
-                    p.targetY = p.y;
+                // Active blocking logic
+                let targetDefender = null;
+                let minTargetDist = Infinity;
+
+                // Find nearest unblocked defender
+                for (let def of players) {
+                    if (def.team !== p.team && !def.blockedBy) {
+                        const dx = def.x - p.x;
+                        const dy = def.y - p.y;
+                        const dist = Math.sqrt(dx*dx + dy*dy);
+
+                        // Consider defenders within reasonable range (e.g., 100 pixels) and ahead of the blocker
+                        if (dist < 100 && dist < minTargetDist) {
+                            // Check if defender is generally in front of the OL
+                            if ((movingRight && def.x >= p.x - 20) || (!movingRight && def.x <= p.x + 20)) {
+                                minTargetDist = dist;
+                                targetDefender = def;
+                            }
+                        }
+                    }
                 }
-                speed = 0.5;
+
+                if (targetDefender) {
+                    p.targetX = targetDefender.x;
+                    p.targetY = targetDefender.y;
+
+                    if (minTargetDist < 15) {
+                        // Engage block
+                        targetDefender.blockedBy = p;
+                        p.blockingTarget = targetDefender;
+                        speed = 0;
+                    } else {
+                        speed = 0.8;
+                    }
+                } else {
+                    // Default behavior if no target
+                    if (p.targetX === null || Math.abs(p.targetX - p.x) < 5) {
+                        p.targetX = p.x + offDir * 5;
+                        p.targetY = p.y;
+                    }
+                    speed = 0.5;
+                }
+
+                // If currently blocking someone
+                if (p.blockingTarget) {
+                    // Check if block is still valid
+                    if (p.blockingTarget.blockedBy !== p) {
+                        p.blockingTarget = null; // Block broken or reassigned
+                    } else {
+                        speed = 0; // Maintain block position
+                        p.targetX = p.x;
+                        p.targetY = p.y;
+                    }
+                }
             } else if (p.role === 'dl') {
                 if (ball.carrier) {
                     p.targetX = ball.carrier.x;
