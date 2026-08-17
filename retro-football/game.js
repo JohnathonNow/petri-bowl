@@ -42,8 +42,12 @@ let input = {
     active: false,
     startX: 0,
     startY: 0,
+    startClientX: 0,
+    startClientY: 0,
     currentX: 0,
     currentY: 0,
+    currentClientX: 0,
+    currentClientY: 0,
     tapped: false,
     lastTapTime: 0,
     doubleTapped: false
@@ -72,8 +76,12 @@ canvas.addEventListener('pointerdown', (e) => {
     input.active = true;
     input.startX = pos.x;
     input.startY = pos.y;
+    input.startClientX = e.clientX;
+    input.startClientY = e.clientY;
     input.currentX = pos.x;
     input.currentY = pos.y;
+    input.currentClientX = e.clientX;
+    input.currentClientY = e.clientY;
 
     // Check for double tap
     const now = Date.now();
@@ -147,7 +155,11 @@ canvas.addEventListener('pointerdown', (e) => {
         // Handled in specific mechanics step
         handlePreSnapInput(pos);
     } else if (currentState === GameState.PLAYING) {
-        handlePlayingInputDown(pos);
+        if (input.doubleTapped) {
+            const activePlayer = players[activePlayerIndex];
+            activePlayer.diving = true;
+            activePlayer.diveTimer = 20; // frames
+        }
     }
 });
 
@@ -157,6 +169,8 @@ canvas.addEventListener('pointermove', (e) => {
     const pos = getCanvasPos(e);
     input.currentX = pos.x;
     input.currentY = pos.y;
+    input.currentClientX = e.clientX;
+    input.currentClientY = e.clientY;
 });
 
 canvas.addEventListener('pointerup', (e) => {
@@ -164,16 +178,19 @@ canvas.addEventListener('pointerup', (e) => {
     if (!input.active) return;
     const pos = getCanvasPos(e);
 
-    // Determine if it was a tap or a drag
-    const dx = pos.x - input.startX;
-    const dy = pos.y - input.startY;
-    const dist = Math.sqrt(dx*dx + dy*dy);
+    // Determine if it was a tap or a drag based on screen coordinates
+    const clientDx = e.clientX - input.startClientX;
+    const clientDy = e.clientY - input.startClientY;
+    const dist = Math.sqrt(clientDx*clientDx + clientDy*clientDy);
 
-    if (dist < 10) {
+    if (dist < 15) {
         input.tapped = true;
+        if (currentState === GameState.PLAYING) {
+            handlePlayingInputTap(pos);
+        }
     } else {
         if (currentState === GameState.PLAYING) {
-            handlePlayingInputDragRelease(input.startX, input.startY, pos.x, pos.y);
+            handlePlayingInputDragRelease(clientDx, clientDy);
         }
     }
 
@@ -256,30 +273,15 @@ function handlePreSnapInput(pos) {
     }
 }
 
-function handlePlayingInputDown(pos) {
+function handlePlayingInputTap(pos) {
     if (currentTeam === 'defense') {
         const activePlayer = players[activePlayerIndex];
-
-        // Dive tackle check
-        if (input.doubleTapped) {
-            activePlayer.diving = true;
-            activePlayer.diveTimer = 20; // frames
-            // Dive in the direction of current target or last movement
-            return;
-        }
 
         // Tap to move safety
         activePlayer.targetX = pos.x;
         activePlayer.targetY = pos.y;
     } else if (currentTeam === 'offense') {
         const activePlayer = players[activePlayerIndex];
-
-        // Dive check
-        if (input.doubleTapped) {
-            activePlayer.diving = true;
-            activePlayer.diveTimer = 20; // frames
-            return;
-        }
 
         // Tap to move active player
         activePlayer.targetX = pos.x;
@@ -308,20 +310,18 @@ function handlePlayingInputDown(pos) {
     }
 }
 
-function handlePlayingInputDragRelease(startX, startY, endX, endY) {
+function handlePlayingInputDragRelease(clientDx, clientDy) {
     if (currentTeam === 'offense') {
         const activePlayer = players[activePlayerIndex];
         if (ball.carrier === activePlayer) {
-            // Calculate drag vector
-            const dx = endX - startX;
-            const dy = endY - startY;
-            const dist = Math.sqrt(dx*dx + dy*dy);
+            // Calculate drag vector based on screen coordinates
+            const dist = Math.sqrt(clientDx*clientDx + clientDy*clientDy);
 
             // Only throw if dragged a minimum distance
             if (dist > 15) {
                 // Inverse trajectory
-                const throwVx = -dx * 0.1;
-                const throwVy = -dy * 0.1;
+                const throwVx = -clientDx * 0.1;
+                const throwVy = -clientDy * 0.1;
                 const throwVz = dist * 0.05; // Arc height proportional to drag distance
 
                 ball.state = 'in_air';
@@ -720,6 +720,57 @@ function draw() {
         // Laces
         ctx.fillStyle = 'white';
         ctx.fillRect(ball.x - 1 * ballScale, ball.y - ball.z - 2 * ballScale, 2 * ballScale, 4 * ballScale);
+    }
+
+    // Trajectory Indicator
+    if (currentState === GameState.PLAYING && input.active && currentTeam === 'offense' && players[activePlayerIndex] === ball.carrier) {
+        const clientDx = input.currentClientX - input.startClientX;
+        const clientDy = input.currentClientY - input.startClientY;
+        const dist = Math.sqrt(clientDx*clientDx + clientDy*clientDy);
+
+        if (dist > 15) {
+            const throwVx = -clientDx * 0.1;
+            const throwVy = -clientDy * 0.1;
+            const throwVz = dist * 0.05;
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.setLineDash([5, 5]);
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            let simX = ball.x;
+            let simY = ball.y;
+            let simZ = 10;
+            let simVz = throwVz;
+
+            ctx.moveTo(simX, simY - simZ);
+
+            // Simulate trajectory until it hits the ground
+            for (let i = 0; i < 60; i++) {
+                simX += throwVx;
+                simY += throwVy;
+                simZ += simVz;
+                simVz -= 0.5;
+
+                if (simZ <= 0) {
+                    simZ = 0;
+                    ctx.lineTo(simX, simY - simZ);
+                    // Draw a landing target marker
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    ctx.strokeStyle = 'rgba(241, 196, 15, 0.8)';
+                    ctx.beginPath();
+                    ctx.ellipse(simX, simY, 15, 8, 0, 0, Math.PI * 2);
+                    ctx.stroke();
+                    ctx.fillStyle = 'rgba(241, 196, 15, 0.3)';
+                    ctx.fill();
+                    break;
+                }
+                ctx.lineTo(simX, simY - simZ);
+            }
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
     }
 
     ctx.restore();
