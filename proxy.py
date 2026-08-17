@@ -31,6 +31,12 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
                     target_url += '?' + parsed_path.query
                 break
 
+        # Serve the retro-football directly without proxying
+        if path.startswith('/retro-football'):
+            if path == '/retro-football' or path == '/retro-football/':
+                self.path = '/retro-football/index.html'
+            return super().do_GET()
+
         if target_url:
             try:
                 req = urllib.request.Request(target_url, headers=self.headers)
