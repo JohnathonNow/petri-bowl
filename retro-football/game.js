@@ -55,7 +55,7 @@ let input = {
 
 // Game Entities (stubs to be filled in next steps)
 let players = [];
-let ball = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, state: 'held', carrier: null };
+let ball = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, state: 'held', carrier: null, thrower: null, throwTimer: 0 };
 let activePlayerIndex = 0;
 
 // Coordinate mapping helper
@@ -244,7 +244,7 @@ function setupPreSnap() {
         activePlayerIndex = 15; // Control MLB
     }
 
-    ball = { x: lineOfScrimmage, y: GAME_HEIGHT/2, z: 0, state: 'snapped', carrier: null };
+    ball = { x: lineOfScrimmage, y: GAME_HEIGHT/2, z: 0, state: 'snapped', carrier: null, thrower: null, throwTimer: 0 };
 }
 
 function handlePreSnapInput(pos) {
@@ -326,6 +326,8 @@ function handlePlayingInputDragRelease(clientDx, clientDy) {
 
                 ball.state = 'in_air';
                 ball.carrier = null;
+                ball.thrower = activePlayer;
+                ball.throwTimer = 30; // Immunity frames for thrower
                 ball.x = activePlayer.x;
                 ball.y = activePlayer.y;
                 ball.z = 10; // Start slightly off ground
@@ -558,6 +560,10 @@ function updateBall() {
         ball.y += ball.vy;
         ball.z += ball.vz;
 
+        if (ball.throwTimer > 0) {
+            ball.throwTimer--;
+        }
+
         // Gravity
         ball.vz -= 0.5;
 
@@ -570,6 +576,7 @@ function updateBall() {
             // Check for interceptions or catches
             for (let i = 0; i < players.length; i++) {
                 const p = players[i];
+                if (p === ball.thrower && ball.throwTimer > 0) continue;
                 // Must be within reach and ball not too high (or diving)
                 const reach = p.diving ? 25 : 15;
                 const maxZ = p.diving ? 15 : 30; // max height they can catch
