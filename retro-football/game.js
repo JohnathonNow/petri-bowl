@@ -120,6 +120,16 @@ canvas.addEventListener('pointerdown', (e) => {
             yardsToGo = 100;
             lineOfScrimmage = movingRight ? 200 : FIELD_WIDTH - 200;
             firstDownLine = movingRight ? lineOfScrimmage + yardsToGo : lineOfScrimmage - yardsToGo;
+        } else if (ball.isPunt) {
+            currentTeam = currentTeam === 'offense' ? 'defense' : 'offense';
+            movingRight = !movingRight;
+            down = 1;
+            yardsToGo = 100;
+            lineOfScrimmage = ball.x;
+            if (lineOfScrimmage < 60) lineOfScrimmage = 60;
+            if (lineOfScrimmage > FIELD_WIDTH - 60) lineOfScrimmage = FIELD_WIDTH - 60;
+            firstDownLine = movingRight ? lineOfScrimmage + yardsToGo : lineOfScrimmage - yardsToGo;
+            ball.isPunt = false;
         } else if (yardsToGo <= 0) {
             // First down
             down = 1;
@@ -249,6 +259,33 @@ function setupPreSnap() {
 
 function handlePreSnapInput(pos) {
     if (currentTeam === 'offense') {
+        // Check if tapping punt button
+        // Button roughly at bottom center: x: GAME_WIDTH/2 - 40 to +40, y: GAME_HEIGHT - 40 to -10
+        // Need to check screen pos, but `pos` is in world coordinates.
+        // Let's use the camera offset to check UI bounds.
+        const uiX = pos.x - camera.x;
+        const uiY = pos.y - camera.y;
+
+        if (uiX > GAME_WIDTH / 2 - 40 && uiX < GAME_WIDTH / 2 + 40 && uiY > GAME_HEIGHT - 40 && uiY < GAME_HEIGHT - 10) {
+            currentState = GameState.PLAYING;
+            const qb = players.find(p => p.role === 'qb');
+            if (qb) {
+                ball.state = 'in_air';
+                ball.carrier = null;
+                ball.thrower = qb;
+                ball.isPunt = true;
+                ball.throwTimer = 30;
+                ball.x = qb.x;
+                ball.y = qb.y;
+                ball.z = 10;
+                let offDir = movingRight ? 1 : -1;
+                ball.vx = offDir * 6; // strong forward punt
+                ball.vy = (Math.random() - 0.5) * 1;
+                ball.vz = 8; // high punt
+            }
+            return;
+        }
+
         // Check if tapping QB
         const qb = players.find(p => p.role === 'qb');
         if (qb) {
@@ -264,11 +301,27 @@ function handlePreSnapInput(pos) {
     } else {
         // Defense can tap anywhere to start play
         currentState = GameState.PLAYING;
-        // CPU snaps ball
+        // CPU logic: check if 4th down, then punt
         const qb = players.find(p => p.role === 'qb');
         if (qb) {
-            ball.state = 'held';
-            ball.carrier = qb;
+            if (down === 4) {
+                // CPU punts on 4th down
+                ball.state = 'in_air';
+                ball.carrier = null;
+                ball.thrower = qb;
+                ball.isPunt = true;
+                ball.throwTimer = 30;
+                ball.x = qb.x;
+                ball.y = qb.y;
+                ball.z = 10;
+                let offDir = movingRight ? 1 : -1;
+                ball.vx = offDir * 6;
+                ball.vy = (Math.random() - 0.5) * 1;
+                ball.vz = 8;
+            } else {
+                ball.state = 'held';
+                ball.carrier = qb;
+            }
         }
     }
 }
@@ -519,9 +572,34 @@ function updatePlayers() {
                      }
                 }
             } else if (p.role === 'qb' && currentTeam === 'defense' && ball.carrier === p) {
-                // CPU QB drops back slightly then runs
-                if (Math.abs(p.x - lineOfScrimmage) < 20) {
+                // CPU QB drops back slightly then runs or passes
+                if (Math.abs(p.x - lineOfScrimmage) < 30) {
                     p.targetX = p.x - offDir * 1;
+
+                    // Chance to pass while dropping back
+                    if (Math.random() < 0.02) {
+                        let receivers = players.filter(r => r.team === p.team && r !== p && r.x * offDir > p.x * offDir);
+                        if (receivers.length > 0) {
+                            let target = receivers[Math.floor(Math.random() * receivers.length)];
+                            let dx = target.x - p.x;
+                            let dy = target.y - p.y;
+                            let dist = Math.sqrt(dx*dx + dy*dy);
+
+                            ball.state = 'in_air';
+                            ball.carrier = null;
+                            ball.thrower = p;
+                            ball.throwTimer = 30;
+                            ball.x = p.x;
+                            ball.y = p.y;
+                            ball.z = 15;
+                            ball.vx = (dx / dist) * 4;
+                            ball.vy = (dy / dist) * 4;
+                            ball.vz = dist * 0.05;
+
+                            p.targetX = null;
+                            p.targetY = null;
+                        }
+                    }
                 } else {
                     p.targetX = p.x + offDir * 200;
                     p.targetY = p.y;
@@ -719,6 +797,21 @@ function draw() {
     // Draw Ball
     if (ball.state !== 'grounded' && (ball.state === 'in_air' || ball.carrier)) {
         const ballScale = 1 + (ball.z / 20); // Scale up based on height
+
+        // Ball Shadow
+        if (ball.state === 'in_air') {
+            const shadowScale = Math.max(0.5, 1 - (ball.z / 60)); // shadow shrinks as ball goes higher
+            // Red shadow if too high to catch (maxZ depends on player diving state, usually 30 is max for non-diving, let's use 30 as threshold)
+            if (ball.z >= 30) {
+                ctx.fillStyle = `rgba(255, 0, 0, ${0.4 * shadowScale})`;
+            } else {
+                ctx.fillStyle = `rgba(0, 0, 0, ${0.4 * shadowScale})`;
+            }
+            ctx.beginPath();
+            ctx.ellipse(ball.x, ball.y, 6 * shadowScale, 3 * shadowScale, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
         ctx.fillStyle = '#784212';
         ctx.beginPath();
         ctx.ellipse(ball.x, ball.y - ball.z, 4 * ballScale, 6 * ballScale, 0, 0, Math.PI * 2);
@@ -787,6 +880,16 @@ function draw() {
     ctx.font = '10px "Press Start 2P"';
     ctx.textAlign = 'left';
     ctx.fillText(`Down: ${down} & ${Math.ceil(yardsToGo / 10)}`, 10, 20);
+
+    // Draw Punt button during PRE_SNAP for offense
+    if (currentState === GameState.PRE_SNAP && currentTeam === 'offense') {
+        ctx.fillStyle = '#E67E22';
+        ctx.fillRect(canvas.width / 2 - 40, canvas.height - 40, 80, 30);
+        ctx.fillStyle = 'white';
+        ctx.textAlign = 'center';
+        ctx.fillText('PUNT', canvas.width / 2, canvas.height - 20);
+    }
+
     if (currentState === GameState.PLAY_OVER) {
         ctx.textAlign = 'center';
         ctx.font = '14px "Press Start 2P"';
