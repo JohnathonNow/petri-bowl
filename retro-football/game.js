@@ -20,6 +20,47 @@ window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
 // Game States
+
+const offensivePlays = [
+    {
+        name: "Four Verts",
+        routes: {
+            wr: [
+                [{ dx: 200, dy: 0 }, { dx: 100, dy: 0 }],
+                [{ dx: 200, dy: 0 }, { dx: 100, dy: 0 }],
+                [{ dx: 200, dy: 0 }, { dx: 100, dy: 0 }]
+            ],
+            te: [[{ dx: 200, dy: 0 }, { dx: 100, dy: 0 }]],
+            rb: [[{ dx: 50, dy: 30 }, { dx: 50, dy: 0 }]]
+        }
+    },
+    {
+        name: "Slants",
+        routes: {
+            wr: [
+                [{ dx: 50, dy: 0 }, { dx: 100, dy: 100 }],
+                [{ dx: 50, dy: 0 }, { dx: 100, dy: -100 }],
+                [{ dx: 50, dy: 0 }, { dx: 100, dy: 100 }]
+            ],
+            te: [[{ dx: 50, dy: 0 }, { dx: 100, dy: -50 }]],
+            rb: [[{ dx: 30, dy: 50 }, { dx: 50, dy: 0 }]]
+        }
+    },
+    {
+        name: "Outs",
+        routes: {
+            wr: [
+                [{ dx: 80, dy: 0 }, { dx: 0, dy: -100 }],
+                [{ dx: 80, dy: 0 }, { dx: 0, dy: 100 }],
+                [{ dx: 60, dy: 0 }, { dx: 0, dy: -80 }]
+            ],
+            te: [[{ dx: 60, dy: 0 }, { dx: 0, dy: 80 }]],
+            rb: [[{ dx: 20, dy: 40 }, { dx: 60, dy: 0 }]]
+        }
+    }
+];
+let currentOffensivePlayIndex = 0;
+
 const GameState = {
     MENU: 0,
     PRE_SNAP: 1,
@@ -208,6 +249,7 @@ canvas.addEventListener('pointerup', (e) => {
 });
 
 // Stubs for game logic
+
 function setupPreSnap() {
     players = [];
     let offDir = movingRight ? -1 : 1;
@@ -227,9 +269,44 @@ function setupPreSnap() {
     // TE
     players.push({ id: 7, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 + 60, role: 'te', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
     // WRs
-    players.push({ id: 8, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 - 120, role: 'wr', team: 'offense', targetX: lineOfScrimmage + defDir * 150, targetY: GAME_HEIGHT/2 - 120, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
-    players.push({ id: 9, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 + 120, role: 'wr', team: 'offense', targetX: lineOfScrimmage + defDir * 150, targetY: GAME_HEIGHT/2 + 120, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
-    players.push({ id: 10, x: lineOfScrimmage + offDir * 20, y: GAME_HEIGHT/2 - 80, role: 'wr', team: 'offense', targetX: lineOfScrimmage + defDir * 150, targetY: GAME_HEIGHT/2 - 80, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+    players.push({ id: 8, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 - 120, role: 'wr', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+    players.push({ id: 9, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 + 120, role: 'wr', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+    players.push({ id: 10, x: lineOfScrimmage + offDir * 20, y: GAME_HEIGHT/2 - 80, role: 'wr', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+
+    // Assign Routes
+    let currentPlay = offensivePlays[currentOffensivePlayIndex];
+    let wrCount = 0;
+    let teCount = 0;
+    let rbCount = 0;
+
+    players.forEach(p => {
+        if (p.team === 'offense') {
+            let routeOffsets = null;
+            if (p.role === 'wr' && currentPlay.routes.wr && currentPlay.routes.wr[wrCount]) {
+                routeOffsets = currentPlay.routes.wr[wrCount];
+                wrCount++;
+            } else if (p.role === 'te' && currentPlay.routes.te && currentPlay.routes.te[teCount]) {
+                routeOffsets = currentPlay.routes.te[teCount];
+                teCount++;
+            } else if (p.role === 'rb' && currentPlay.routes.rb && currentPlay.routes.rb[rbCount]) {
+                routeOffsets = currentPlay.routes.rb[rbCount];
+                rbCount++;
+            }
+
+            if (routeOffsets) {
+                p.routePoints = [];
+                let cx = p.x;
+                let cy = p.y;
+                for (let pt of routeOffsets) {
+                    cx += -offDir * pt.dx; // Moving right means offDir is -1. If movingRight is true, defDir is 1. x should increase. So x += 1 * pt.dx. Wait, offDir is movingRight ? -1 : 1. So -offDir is 1 when movingRight.
+                    cy += pt.dy;
+                    p.routePoints.push({ x: cx, y: cy });
+                }
+                p.currentRouteIndex = 0;
+            }
+        }
+    });
+
 
     // Defense (11 players)
     // 4 DL
@@ -265,6 +342,13 @@ function handlePreSnapInput(pos) {
         // Let's use the camera offset to check UI bounds.
         const uiX = pos.x - camera.x;
         const uiY = pos.y - camera.y;
+
+        // Check Change Play button
+        if (uiX > GAME_WIDTH / 2 - 60 && uiX < GAME_WIDTH / 2 + 60 && uiY > GAME_HEIGHT - 80 && uiY < GAME_HEIGHT - 50) {
+            currentOffensivePlayIndex = (currentOffensivePlayIndex + 1) % offensivePlays.length;
+            setupPreSnap();
+            return;
+        }
 
         if (uiX > GAME_WIDTH / 2 - 40 && uiX < GAME_WIDTH / 2 + 40 && uiY > GAME_HEIGHT - 40 && uiY < GAME_HEIGHT - 10) {
             currentState = GameState.PLAYING;
@@ -373,9 +457,9 @@ function handlePlayingInputDragRelease(clientDx, clientDy) {
             // Only throw if dragged a minimum distance
             if (dist > 15) {
                 // Inverse trajectory
-                const throwVx = -clientDx * 0.1;
-                const throwVy = -clientDy * 0.1;
-                const throwVz = dist * 0.05; // Arc height proportional to drag distance
+                const throwVx = -clientDx * 0.06;
+                const throwVy = -clientDy * 0.06;
+                const throwVz = dist * 0.15; // Arc height proportional to drag distance
 
                 ball.state = 'in_air';
                 ball.carrier = null;
@@ -475,14 +559,26 @@ function updatePlayers() {
 
         // Basic AI for non-active players
         if (idx !== activePlayerIndex) {
-            if (p.role === 'wr' || p.role === 'te') {
-                // Simple streak route
-                if (p.targetX === null) {
-                    p.targetX = p.x + offDir * 200;
-                    p.targetY = p.y;
-                }
-                if (Math.abs(p.x - p.targetX) < 5 && Math.abs(p.y - p.targetY) < 5) {
+            if (p.role === 'wr' || p.role === 'te' || (p.role === 'rb' && p.team === 'offense')) {
+                if (p.routePoints && p.currentRouteIndex < p.routePoints.length) {
+                    let targetPoint = p.routePoints[p.currentRouteIndex];
+                    p.targetX = targetPoint.x;
+                    p.targetY = targetPoint.y;
+                    if (Math.abs(p.x - p.targetX) < 5 && Math.abs(p.y - p.targetY) < 5) {
+                        p.currentRouteIndex++;
+                    }
+                } else if (p.routePoints && p.currentRouteIndex >= p.routePoints.length) {
+                    // Reached end of route, run straight
                     p.targetX += offDir * 50;
+                } else {
+                    // Fallback simple streak
+                    if (p.targetX === null) {
+                        p.targetX = p.x + offDir * 200;
+                        p.targetY = p.y;
+                    }
+                    if (Math.abs(p.x - p.targetX) < 5 && Math.abs(p.y - p.targetY) < 5) {
+                        p.targetX += offDir * 50;
+                    }
                 }
             } else if (p.role === 'ol') {
                 // Active blocking logic
@@ -794,6 +890,26 @@ function draw() {
         ctx.fillRect(p.x - 6, p.y - (p.diving ? 4 : 20), 12, 8);
     });
 
+    // Draw Player Routes
+    if ((currentState === GameState.PRE_SNAP || currentState === GameState.PLAYING) && currentTeam === 'offense') {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.setLineDash([5, 5]);
+        ctx.lineWidth = 2;
+
+        players.forEach(p => {
+            if (p.team === 'offense' && p.routePoints && p.currentRouteIndex < p.routePoints.length) {
+                ctx.beginPath();
+                ctx.moveTo(p.x, p.y);
+                for (let i = p.currentRouteIndex; i < p.routePoints.length; i++) {
+                    ctx.lineTo(p.routePoints[i].x, p.routePoints[i].y);
+                }
+                ctx.stroke();
+            }
+        });
+
+        ctx.setLineDash([]);
+    }
+
     // Draw Ball
     if (ball.state !== 'grounded' && (ball.state === 'in_air' || ball.carrier)) {
         const ballScale = 1 + (ball.z / 20); // Scale up based on height
@@ -829,9 +945,9 @@ function draw() {
         const dist = Math.sqrt(clientDx*clientDx + clientDy*clientDy);
 
         if (dist > 15) {
-            const throwVx = -clientDx * 0.1;
-            const throwVy = -clientDy * 0.1;
-            const throwVz = dist * 0.05;
+            const throwVx = -clientDx * 0.06;
+            const throwVy = -clientDy * 0.06;
+            const throwVz = dist * 0.15;
 
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
             ctx.setLineDash([5, 5]);
@@ -846,7 +962,7 @@ function draw() {
             ctx.moveTo(simX, simY - simZ);
 
             // Simulate trajectory until it hits the ground
-            for (let i = 0; i < 60; i++) {
+            for (let i = 0; i < 200; i++) {
                 simX += throwVx;
                 simY += throwVy;
                 simZ += simVz;
@@ -883,6 +999,14 @@ function draw() {
 
     // Draw Punt button during PRE_SNAP for offense
     if (currentState === GameState.PRE_SNAP && currentTeam === 'offense') {
+        // Change Play Button
+        ctx.fillStyle = '#3498DB';
+        ctx.fillRect(canvas.width / 2 - 60, canvas.height - 80, 120, 30);
+        ctx.fillStyle = 'white';
+        ctx.textAlign = 'center';
+        ctx.fillText('Play: ' + offensivePlays[currentOffensivePlayIndex].name, canvas.width / 2, canvas.height - 60);
+
+        // Punt Button
         ctx.fillStyle = '#E67E22';
         ctx.fillRect(canvas.width / 2 - 40, canvas.height - 40, 80, 30);
         ctx.fillStyle = 'white';
