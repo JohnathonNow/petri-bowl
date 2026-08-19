@@ -70,6 +70,10 @@ const GameState = {
 
 let currentState = GameState.MENU;
 let currentTeam = 'offense'; // 'offense' or 'defense'
+let possession = 'home'; // 'home' or 'away'
+let homeScore = 0;
+let awayScore = 0;
+let playType = 'kickoff'; // 'normal', 'kickoff', 'pat', 'pat_kick', 'fg'
 
 let down = 1;
 let yardsToGo = 100; // in pixels (10 yards * 10)
@@ -136,6 +140,15 @@ canvas.addEventListener('pointerdown', (e) => {
     if (currentState === GameState.MENU) {
         // Start game alternating sides for simplicity, or just set to offense
         currentTeam = 'offense';
+        possession = 'home';
+        playType = 'kickoff';
+        homeScore = 0;
+        awayScore = 0;
+        movingRight = true;
+        lineOfScrimmage = 410; // 35 yard line (60 + 350)
+        firstDownLine = lineOfScrimmage + 100;
+        down = 1;
+        yardsToGo = 100;
         setupPreSnap();
         currentState = GameState.PRE_SNAP;
     } else if (currentState === GameState.PLAY_OVER) {
@@ -150,27 +163,135 @@ canvas.addEventListener('pointerdown', (e) => {
         yardsToGo -= yardsGained;
 
         let touchdown = false;
+        let isSafety = false;
         if (ball.x <= 60 || ball.x >= FIELD_WIDTH - 60) {
             touchdown = true;
         }
 
-        if (touchdown) {
-            currentTeam = currentTeam === 'offense' ? 'defense' : 'offense';
-            movingRight = !movingRight;
+        if (playType === 'pat' || playType === 'pat_kick' || playType === 'fg') {
+            let success = false;
+            if (playType === 'pat_kick' || playType === 'fg') {
+                // Check if ball went through uprights
+                const correctEndzone = movingRight ? (ball.x >= FIELD_WIDTH - 60) : (ball.x <= 60);
+                const betweenUprights = ball.y > FIELD_HEIGHT/2 - 30 && ball.y < FIELD_HEIGHT/2 + 30;
+                if (correctEndzone && betweenUprights && ball.z > 15) {
+                    success = true;
+                }
+            } else if (playType === 'pat' && touchdown) {
+                success = true;
+            }
+
+            if (success) {
+                if (playType === 'fg') {
+                    if (possession === 'home') homeScore += 3;
+                    else awayScore += 3;
+                } else if (playType === 'pat_kick') {
+                    if (possession === 'home') homeScore += 1;
+                    else awayScore += 1;
+                } else if (playType === 'pat') {
+                    if (possession === 'home') homeScore += 2;
+                    else awayScore += 2;
+                }
+
+                // Kickoff next (Scoring team kicks off)
+                playType = 'kickoff';
+                // Do not flip possession yet - scoring team needs to kick it off.
+                // But we must flip movingRight so they kick it in the opposite direction.
+                // If they just scored movingRight = true, they should kickoff movingRight = false.
+                movingRight = !movingRight;
+                lineOfScrimmage = movingRight ? 410 : FIELD_WIDTH - 410;
+                firstDownLine = movingRight ? lineOfScrimmage + 100 : lineOfScrimmage - 100;
+                down = 1;
+                yardsToGo = 100;
+                ball.isPunt = false;
+            } else {
+                // Missed
+                if (playType === 'fg') {
+                    // Turnover on downs
+                    playType = 'normal';
+                    currentTeam = currentTeam === 'offense' ? 'defense' : 'offense';
+                    possession = possession === 'home' ? 'away' : 'home';
+                    movingRight = !movingRight;
+                    down = 1;
+                    yardsToGo = 100;
+                    lineOfScrimmage = ball.x;
+                    if (lineOfScrimmage < 60) lineOfScrimmage = 60;
+                    if (lineOfScrimmage > FIELD_WIDTH - 60) lineOfScrimmage = FIELD_WIDTH - 60;
+                    firstDownLine = movingRight ? lineOfScrimmage + yardsToGo : lineOfScrimmage - yardsToGo;
+                    ball.isPunt = false;
+                } else {
+                    // Missed PAT -> Kickoff
+                    playType = 'kickoff';
+                    movingRight = !movingRight;
+                    lineOfScrimmage = movingRight ? 410 : FIELD_WIDTH - 410;
+                    firstDownLine = movingRight ? lineOfScrimmage + 100 : lineOfScrimmage - 100;
+                    down = 1;
+                    yardsToGo = 100;
+                    ball.isPunt = false;
+                }
+            }
+        } else if (playType === 'kickoff') {
+            // Received kickoff
+            playType = 'normal';
             down = 1;
             yardsToGo = 100;
-            lineOfScrimmage = movingRight ? 200 : FIELD_WIDTH - 200;
+
+            // The team that just kicked was 'offense'. The receiving team is now 'offense'.
+            currentTeam = currentTeam === 'offense' ? 'defense' : 'offense';
+            possession = possession === 'home' ? 'away' : 'home';
+            movingRight = !movingRight;
+
+            // Start where they caught it, or 25 if touchback
+            if (ball.x <= 60 || ball.x >= FIELD_WIDTH - 60) {
+                lineOfScrimmage = movingRight ? 60 + 250 : FIELD_WIDTH - 60 - 250;
+            } else {
+                lineOfScrimmage = ball.x;
+            }
+            if (lineOfScrimmage < 60) lineOfScrimmage = 60;
+            if (lineOfScrimmage > FIELD_WIDTH - 60) lineOfScrimmage = FIELD_WIDTH - 60;
             firstDownLine = movingRight ? lineOfScrimmage + yardsToGo : lineOfScrimmage - yardsToGo;
         } else if (ball.isPunt) {
             currentTeam = currentTeam === 'offense' ? 'defense' : 'offense';
+            possession = possession === 'home' ? 'away' : 'home';
             movingRight = !movingRight;
             down = 1;
             yardsToGo = 100;
-            lineOfScrimmage = ball.x;
+            // If punt into endzone (touchdown is true), it's a touchback to 20 yard line
+            if (touchdown) {
+                lineOfScrimmage = movingRight ? 60 + 200 : FIELD_WIDTH - 60 - 200;
+            } else {
+                lineOfScrimmage = ball.x;
+            }
             if (lineOfScrimmage < 60) lineOfScrimmage = 60;
             if (lineOfScrimmage > FIELD_WIDTH - 60) lineOfScrimmage = FIELD_WIDTH - 60;
             firstDownLine = movingRight ? lineOfScrimmage + yardsToGo : lineOfScrimmage - yardsToGo;
             ball.isPunt = false;
+        } else if (touchdown) {
+            // Safety or TD?
+            const offensiveEndzone = movingRight ? (ball.x >= FIELD_WIDTH - 60) : (ball.x <= 60);
+
+            if (offensiveEndzone) {
+                // Touchdown!
+                if (possession === 'home') homeScore += 6;
+                else awayScore += 6;
+
+                playType = 'pat';
+                down = 1;
+                yardsToGo = 100;
+                lineOfScrimmage = movingRight ? FIELD_WIDTH - 80 : 80; // 2 yard line
+                firstDownLine = movingRight ? FIELD_WIDTH - 60 : 60;
+            } else {
+                // Safety (simplistic implementation)
+                if (possession === 'home') awayScore += 2;
+                else homeScore += 2;
+
+                playType = 'kickoff';
+                currentTeam = currentTeam === 'offense' ? 'defense' : 'offense';
+                possession = possession === 'home' ? 'away' : 'home';
+                movingRight = !movingRight;
+                lineOfScrimmage = movingRight ? 260 : FIELD_WIDTH - 260; // 20 yard line punt (simplified to kickoff at 20)
+                firstDownLine = movingRight ? lineOfScrimmage + 100 : lineOfScrimmage - 100;
+            }
         } else if (yardsToGo <= 0) {
             // First down
             down = 1;
@@ -185,6 +306,7 @@ canvas.addEventListener('pointerdown', (e) => {
             if (down > 4) {
                 // Turnover on downs
                 currentTeam = currentTeam === 'offense' ? 'defense' : 'offense';
+                possession = possession === 'home' ? 'away' : 'home';
                 movingRight = !movingRight;
                 down = 1;
                 yardsToGo = 100;
@@ -256,74 +378,95 @@ function setupPreSnap() {
     let defDir = movingRight ? 1 : -1;
 
     // Offense (11 players)
-    // 5 OL
-    players.push({ id: 0, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2, role: 'ol', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 }); // C
-    players.push({ id: 1, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 - 20, role: 'ol', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 }); // LG
-    players.push({ id: 2, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 + 20, role: 'ol', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 }); // RG
-    players.push({ id: 3, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 - 40, role: 'ol', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 }); // LT
-    players.push({ id: 4, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 + 40, role: 'ol', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 }); // RT
-    // QB
-    players.push({ id: 5, x: lineOfScrimmage + offDir * 30, y: GAME_HEIGHT/2, role: 'qb', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
-    // RB
-    players.push({ id: 6, x: lineOfScrimmage + offDir * 60, y: GAME_HEIGHT/2, role: 'rb', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
-    // TE
-    players.push({ id: 7, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 + 60, role: 'te', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
-    // WRs
-    players.push({ id: 8, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 - 120, role: 'wr', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
-    players.push({ id: 9, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 + 120, role: 'wr', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
-    players.push({ id: 10, x: lineOfScrimmage + offDir * 20, y: GAME_HEIGHT/2 - 80, role: 'wr', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+    if (playType === 'kickoff') {
+        // Kicking team (offense) spread out along their 35 yard line
+        for (let i = 0; i < 11; i++) {
+            let yPos = (FIELD_HEIGHT / 12) * (i + 1);
+            let role = i === 5 ? 'qb' : 'ol'; // 5 is kicker
+            players.push({ id: i, x: lineOfScrimmage + offDir * (i === 5 ? 30 : 0), y: yPos, role: role, team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+        }
+    } else {
+        // 5 OL
+        players.push({ id: 0, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2, role: 'ol', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 }); // C
+        players.push({ id: 1, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 - 20, role: 'ol', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 }); // LG
+        players.push({ id: 2, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 + 20, role: 'ol', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 }); // RG
+        players.push({ id: 3, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 - 40, role: 'ol', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 }); // LT
+        players.push({ id: 4, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 + 40, role: 'ol', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 }); // RT
+        // QB (or Kicker if FG/PAT_KICK, but QB role is fine)
+        players.push({ id: 5, x: lineOfScrimmage + offDir * ((playType === 'fg' || playType === 'pat_kick') ? 70 : 30), y: GAME_HEIGHT/2, role: 'qb', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+        // RB
+        players.push({ id: 6, x: lineOfScrimmage + offDir * 60, y: GAME_HEIGHT/2, role: 'rb', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+        // TE
+        players.push({ id: 7, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 + 60, role: 'te', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+        // WRs
+        players.push({ id: 8, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 - 120, role: 'wr', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+        players.push({ id: 9, x: lineOfScrimmage + offDir * 10, y: GAME_HEIGHT/2 + 120, role: 'wr', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+        players.push({ id: 10, x: lineOfScrimmage + offDir * 20, y: GAME_HEIGHT/2 - 80, role: 'wr', team: 'offense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+    }
 
     // Assign Routes
-    let currentPlay = offensivePlays[currentOffensivePlayIndex];
-    let wrCount = 0;
-    let teCount = 0;
-    let rbCount = 0;
+    if (playType === 'normal' || playType === 'pat') {
+        let currentPlay = offensivePlays[currentOffensivePlayIndex];
+        let wrCount = 0;
+        let teCount = 0;
+        let rbCount = 0;
 
-    players.forEach(p => {
-        if (p.team === 'offense') {
-            let routeOffsets = null;
-            if (p.role === 'wr' && currentPlay.routes.wr && currentPlay.routes.wr[wrCount]) {
-                routeOffsets = currentPlay.routes.wr[wrCount];
-                wrCount++;
-            } else if (p.role === 'te' && currentPlay.routes.te && currentPlay.routes.te[teCount]) {
-                routeOffsets = currentPlay.routes.te[teCount];
-                teCount++;
-            } else if (p.role === 'rb' && currentPlay.routes.rb && currentPlay.routes.rb[rbCount]) {
-                routeOffsets = currentPlay.routes.rb[rbCount];
-                rbCount++;
-            }
-
-            if (routeOffsets) {
-                p.routePoints = [];
-                let cx = p.x;
-                let cy = p.y;
-                for (let pt of routeOffsets) {
-                    cx += -offDir * pt.dx; // Moving right means offDir is -1. If movingRight is true, defDir is 1. x should increase. So x += 1 * pt.dx. Wait, offDir is movingRight ? -1 : 1. So -offDir is 1 when movingRight.
-                    cy += pt.dy;
-                    p.routePoints.push({ x: cx, y: cy });
+        players.forEach(p => {
+            if (p.team === 'offense') {
+                let routeOffsets = null;
+                if (p.role === 'wr' && currentPlay.routes.wr && currentPlay.routes.wr[wrCount]) {
+                    routeOffsets = currentPlay.routes.wr[wrCount];
+                    wrCount++;
+                } else if (p.role === 'te' && currentPlay.routes.te && currentPlay.routes.te[teCount]) {
+                    routeOffsets = currentPlay.routes.te[teCount];
+                    teCount++;
+                } else if (p.role === 'rb' && currentPlay.routes.rb && currentPlay.routes.rb[rbCount]) {
+                    routeOffsets = currentPlay.routes.rb[rbCount];
+                    rbCount++;
                 }
-                p.currentRouteIndex = 0;
-            }
-        }
-    });
 
+                if (routeOffsets) {
+                    p.routePoints = [];
+                    let cx = p.x;
+                    let cy = p.y;
+                    for (let pt of routeOffsets) {
+                        cx += -offDir * pt.dx;
+                        cy += pt.dy;
+                        p.routePoints.push({ x: cx, y: cy });
+                    }
+                    p.currentRouteIndex = 0;
+                }
+            }
+        });
+    }
 
     // Defense (11 players)
-    // 4 DL
-    players.push({ id: 11, x: lineOfScrimmage + defDir * 10, y: GAME_HEIGHT/2 - 15, role: 'dl', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
-    players.push({ id: 12, x: lineOfScrimmage + defDir * 10, y: GAME_HEIGHT/2 + 15, role: 'dl', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
-    players.push({ id: 13, x: lineOfScrimmage + defDir * 10, y: GAME_HEIGHT/2 - 45, role: 'dl', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
-    players.push({ id: 14, x: lineOfScrimmage + defDir * 10, y: GAME_HEIGHT/2 + 45, role: 'dl', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
-    // 3 LB
-    players.push({ id: 15, x: lineOfScrimmage + defDir * 40, y: GAME_HEIGHT/2, role: 'lb', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
-    players.push({ id: 16, x: lineOfScrimmage + defDir * 40, y: GAME_HEIGHT/2 - 30, role: 'lb', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
-    players.push({ id: 17, x: lineOfScrimmage + defDir * 40, y: GAME_HEIGHT/2 + 30, role: 'lb', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
-    // 2 CB
-    players.push({ id: 18, x: lineOfScrimmage + defDir * 20, y: GAME_HEIGHT/2 - 120, role: 'cb', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
-    players.push({ id: 19, x: lineOfScrimmage + defDir * 20, y: GAME_HEIGHT/2 + 120, role: 'cb', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
-    // 2 S
-    players.push({ id: 20, x: lineOfScrimmage + defDir * 100, y: GAME_HEIGHT/2 - 40, role: 'safety', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
-    players.push({ id: 21, x: lineOfScrimmage + defDir * 100, y: GAME_HEIGHT/2 + 40, role: 'safety', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+    if (playType === 'kickoff') {
+        // Receiving team spread out
+        for (let i = 0; i < 11; i++) {
+            let role = (i === 10) ? 'safety' : 'lb'; // 10 is returner
+            let dx = (i === 10) ? defDir * 500 : defDir * (100 + Math.random() * 200);
+            let yPos = (FIELD_HEIGHT / 11) * (i + 0.5);
+            if (i === 10) yPos = GAME_HEIGHT / 2;
+            players.push({ id: 11 + i, x: lineOfScrimmage + dx, y: yPos, role: role, team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+        }
+    } else {
+        // 4 DL
+        players.push({ id: 11, x: lineOfScrimmage + defDir * 10, y: GAME_HEIGHT/2 - 15, role: 'dl', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+        players.push({ id: 12, x: lineOfScrimmage + defDir * 10, y: GAME_HEIGHT/2 + 15, role: 'dl', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+        players.push({ id: 13, x: lineOfScrimmage + defDir * 10, y: GAME_HEIGHT/2 - 45, role: 'dl', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+        players.push({ id: 14, x: lineOfScrimmage + defDir * 10, y: GAME_HEIGHT/2 + 45, role: 'dl', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+        // 3 LB
+        players.push({ id: 15, x: lineOfScrimmage + defDir * 40, y: GAME_HEIGHT/2, role: 'lb', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+        players.push({ id: 16, x: lineOfScrimmage + defDir * 40, y: GAME_HEIGHT/2 - 30, role: 'lb', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+        players.push({ id: 17, x: lineOfScrimmage + defDir * 40, y: GAME_HEIGHT/2 + 30, role: 'lb', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+        // 2 CB
+        players.push({ id: 18, x: lineOfScrimmage + defDir * 20, y: GAME_HEIGHT/2 - 120, role: 'cb', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+        players.push({ id: 19, x: lineOfScrimmage + defDir * 20, y: GAME_HEIGHT/2 + 120, role: 'cb', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+        // 2 S
+        players.push({ id: 20, x: lineOfScrimmage + defDir * 100, y: GAME_HEIGHT/2 - 40, role: 'safety', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+        players.push({ id: 21, x: lineOfScrimmage + defDir * 100, y: GAME_HEIGHT/2 + 40, role: 'safety', team: 'defense', targetX: null, targetY: null, diving: false, blocking: 50 + Math.random() * 50, strength: 50 + Math.random() * 50, blockedBy: null, blockingTarget: null, blockTimer: 0, stunTimer: 0 });
+    }
 
     if (currentTeam === 'offense') {
         activePlayerIndex = 5; // Control QB
@@ -336,23 +479,94 @@ function setupPreSnap() {
 
 function handlePreSnapInput(pos) {
     if (currentTeam === 'offense') {
-        // Check if tapping punt button
-        // Button roughly at bottom center: x: GAME_WIDTH/2 - 40 to +40, y: GAME_HEIGHT - 40 to -10
-        // Need to check screen pos, but `pos` is in world coordinates.
-        // Let's use the camera offset to check UI bounds.
         const uiX = pos.x - camera.x;
         const uiY = pos.y - camera.y;
 
-        // Check Change Play button
-        if (uiX > GAME_WIDTH / 2 - 60 && uiX < GAME_WIDTH / 2 + 60 && uiY > GAME_HEIGHT - 80 && uiY < GAME_HEIGHT - 50) {
-            currentOffensivePlayIndex = (currentOffensivePlayIndex + 1) % offensivePlays.length;
-            setupPreSnap();
-            return;
-        }
+        if (playType === 'pat') {
+            // 2 PT Play (Change Play Button Area)
+            if (uiX > GAME_WIDTH / 2 - 90 && uiX < GAME_WIDTH / 2 + 90 && uiY > GAME_HEIGHT - 80 && uiY < GAME_HEIGHT - 50) {
+                currentOffensivePlayIndex = (currentOffensivePlayIndex + 1) % offensivePlays.length;
+                setupPreSnap();
+                return;
+            }
 
-        if (uiX > GAME_WIDTH / 2 - 40 && uiX < GAME_WIDTH / 2 + 40 && uiY > GAME_HEIGHT - 40 && uiY < GAME_HEIGHT - 10) {
+            // 1 PT Kick
+            if (uiX > GAME_WIDTH / 2 - 60 && uiX < GAME_WIDTH / 2 + 60 && uiY > GAME_HEIGHT - 40 && uiY < GAME_HEIGHT - 10) {
+                playType = 'pat_kick';
+                currentState = GameState.PLAYING;
+                const qb = players.find(p => p.role === 'qb');
+                let offDir = movingRight ? 1 : -1;
+                if (qb) {
+                    qb.x -= offDir * 40; // move kicker back
+                    ball.state = 'in_air';
+                    ball.carrier = null;
+                    ball.thrower = qb;
+                    ball.isPunt = true;
+                    ball.throwTimer = 30;
+                    ball.x = qb.x;
+                    ball.y = qb.y;
+                    ball.z = 10;
+                    ball.vx = offDir * 7; // strong kick towards goal
+                    ball.vy = (GAME_HEIGHT/2 - qb.y) * 0.05; // aim at center
+                    ball.vz = 8;
+                }
+                return;
+            }
+        } else if (playType === 'normal') {
+            // Check Change Play button
+            if (uiX > GAME_WIDTH / 2 - 60 && uiX < GAME_WIDTH / 2 + 60 && uiY > GAME_HEIGHT - 80 && uiY < GAME_HEIGHT - 50) {
+                currentOffensivePlayIndex = (currentOffensivePlayIndex + 1) % offensivePlays.length;
+                setupPreSnap();
+                return;
+            }
+
+            // Punt Button
+            if (uiX > GAME_WIDTH / 2 - 90 && uiX < GAME_WIDTH / 2 - 10 && uiY > GAME_HEIGHT - 40 && uiY < GAME_HEIGHT - 10) {
+                currentState = GameState.PLAYING;
+                const qb = players.find(p => p.role === 'qb');
+                if (qb) {
+                    ball.state = 'in_air';
+                    ball.carrier = null;
+                    ball.thrower = qb;
+                    ball.isPunt = true;
+                    ball.throwTimer = 30;
+                    ball.x = qb.x;
+                    ball.y = qb.y;
+                    ball.z = 10;
+                    let offDir = movingRight ? 1 : -1;
+                    ball.vx = offDir * 6; // strong forward punt
+                    ball.vy = (Math.random() - 0.5) * 1;
+                    ball.vz = 8; // high punt
+                }
+                return;
+            }
+
+            // Field Goal Button
+            if (uiX > GAME_WIDTH / 2 + 10 && uiX < GAME_WIDTH / 2 + 90 && uiY > GAME_HEIGHT - 40 && uiY < GAME_HEIGHT - 10) {
+                playType = 'fg';
+                currentState = GameState.PLAYING;
+                const qb = players.find(p => p.role === 'qb');
+                let offDir = movingRight ? 1 : -1;
+                if (qb) {
+                    qb.x -= offDir * 40; // move kicker back
+                    ball.state = 'in_air';
+                    ball.carrier = null;
+                    ball.thrower = qb;
+                    ball.isPunt = true;
+                    ball.throwTimer = 30;
+                    ball.x = qb.x;
+                    ball.y = qb.y;
+                    ball.z = 10;
+                    ball.vx = offDir * 7; // strong kick towards goal
+                    ball.vy = (GAME_HEIGHT/2 - qb.y) * 0.05; // aim at center
+                    ball.vz = 8;
+                }
+                return;
+            }
+        } else if (playType === 'kickoff') {
+            // Initiate kickoff
             currentState = GameState.PLAYING;
-            const qb = players.find(p => p.role === 'qb');
+            const qb = players.find(p => p.role === 'qb'); // Kicker
             if (qb) {
                 ball.state = 'in_air';
                 ball.carrier = null;
@@ -363,9 +577,9 @@ function handlePreSnapInput(pos) {
                 ball.y = qb.y;
                 ball.z = 10;
                 let offDir = movingRight ? 1 : -1;
-                ball.vx = offDir * 6; // strong forward punt
+                ball.vx = offDir * 6;
                 ball.vy = (Math.random() - 0.5) * 1;
-                ball.vz = 8; // high punt
+                ball.vz = 8;
             }
             return;
         }
@@ -385,11 +599,10 @@ function handlePreSnapInput(pos) {
     } else {
         // Defense can tap anywhere to start play
         currentState = GameState.PLAYING;
-        // CPU logic: check if 4th down, then punt
+        // CPU logic: check if 4th down, then punt, or PAT/Kickoff
         const qb = players.find(p => p.role === 'qb');
         if (qb) {
-            if (down === 4) {
-                // CPU punts on 4th down
+            if (playType === 'kickoff') {
                 ball.state = 'in_air';
                 ball.carrier = null;
                 ball.thrower = qb;
@@ -402,6 +615,52 @@ function handlePreSnapInput(pos) {
                 ball.vx = offDir * 6;
                 ball.vy = (Math.random() - 0.5) * 1;
                 ball.vz = 8;
+            } else if (playType === 'pat') {
+                playType = 'pat_kick'; // CPU always kicks PAT
+                ball.state = 'in_air';
+                ball.carrier = null;
+                ball.thrower = qb;
+                ball.isPunt = true;
+                ball.throwTimer = 30;
+                ball.x = qb.x;
+                ball.y = qb.y;
+                ball.z = 10;
+                let offDir = movingRight ? 1 : -1;
+                ball.vx = offDir * 7;
+                ball.vy = (GAME_HEIGHT/2 - qb.y) * 0.05;
+                ball.vz = 8;
+            } else if (down === 4) {
+                // CPU logic: FG if inside 40
+                let inside40 = movingRight ? lineOfScrimmage > FIELD_WIDTH - 460 : lineOfScrimmage < 460;
+                if (inside40) {
+                    playType = 'fg';
+                    ball.state = 'in_air';
+                    ball.carrier = null;
+                    ball.thrower = qb;
+                    ball.isPunt = true; // behaves mostly like punt for collision purposes
+                    ball.throwTimer = 30;
+                    ball.x = qb.x;
+                    ball.y = qb.y;
+                    ball.z = 10;
+                    let offDir = movingRight ? 1 : -1;
+                    ball.vx = offDir * 7;
+                    ball.vy = (GAME_HEIGHT/2 - qb.y) * 0.05;
+                    ball.vz = 8;
+                } else {
+                    // CPU punts on 4th down outside 40
+                    ball.state = 'in_air';
+                    ball.carrier = null;
+                    ball.thrower = qb;
+                    ball.isPunt = true;
+                    ball.throwTimer = 30;
+                    ball.x = qb.x;
+                    ball.y = qb.y;
+                    ball.z = 10;
+                    let offDir = movingRight ? 1 : -1;
+                    ball.vx = offDir * 6;
+                    ball.vy = (Math.random() - 0.5) * 1;
+                    ball.vz = 8;
+                }
             } else {
                 ball.state = 'held';
                 ball.carrier = qb;
@@ -851,6 +1110,17 @@ function draw() {
     ctx.lineTo(firstDownLine, FIELD_HEIGHT);
     ctx.stroke();
 
+    // Draw Goalposts
+    ctx.fillStyle = '#F1C40F'; // Yellow goalposts
+    // Left goalpost
+    ctx.fillRect(0, FIELD_HEIGHT / 2 - 30, 10, 5); // top
+    ctx.fillRect(0, FIELD_HEIGHT / 2 + 30, 10, 5); // bottom
+    ctx.fillRect(5, FIELD_HEIGHT / 2 - 30, 5, 60); // crossbar
+    // Right goalpost
+    ctx.fillRect(FIELD_WIDTH - 10, FIELD_HEIGHT / 2 - 30, 10, 5);
+    ctx.fillRect(FIELD_WIDTH - 10, FIELD_HEIGHT / 2 + 30, 10, 5);
+    ctx.fillRect(FIELD_WIDTH - 10, FIELD_HEIGHT / 2 - 30, 5, 60);
+
     if (currentState === GameState.MENU) {
         ctx.restore();
         ctx.fillStyle = 'white';
@@ -994,24 +1264,52 @@ function draw() {
     // UI Text
     ctx.fillStyle = 'white';
     ctx.font = '10px "Press Start 2P"';
+
+    // Top bar score display
     ctx.textAlign = 'left';
     ctx.fillText(`Down: ${down} & ${Math.ceil(yardsToGo / 10)}`, 10, 20);
 
-    // Draw Punt button during PRE_SNAP for offense
-    if (currentState === GameState.PRE_SNAP && currentTeam === 'offense') {
-        // Change Play Button
-        ctx.fillStyle = '#3498DB';
-        ctx.fillRect(canvas.width / 2 - 60, canvas.height - 80, 120, 30);
-        ctx.fillStyle = 'white';
-        ctx.textAlign = 'center';
-        ctx.fillText('Play: ' + offensivePlays[currentOffensivePlayIndex].name, canvas.width / 2, canvas.height - 60);
+    ctx.textAlign = 'center';
+    ctx.fillText(`HOME ${homeScore} - ${awayScore} AWAY`, canvas.width / 2, 20);
 
-        // Punt Button
-        ctx.fillStyle = '#E67E22';
-        ctx.fillRect(canvas.width / 2 - 40, canvas.height - 40, 80, 30);
-        ctx.fillStyle = 'white';
-        ctx.textAlign = 'center';
-        ctx.fillText('PUNT', canvas.width / 2, canvas.height - 20);
+    // Draw Buttons during PRE_SNAP for offense
+    if (currentState === GameState.PRE_SNAP && currentTeam === 'offense') {
+        if (playType === 'pat') {
+            // 2 PT Play Button
+            ctx.fillStyle = '#3498DB';
+            ctx.fillRect(canvas.width / 2 - 90, canvas.height - 80, 180, 30);
+            ctx.fillStyle = 'white';
+            ctx.textAlign = 'center';
+            ctx.fillText('2 PT: ' + offensivePlays[currentOffensivePlayIndex].name, canvas.width / 2, canvas.height - 60);
+
+            // 1 PT Kick Button
+            ctx.fillStyle = '#2ECC71';
+            ctx.fillRect(canvas.width / 2 - 60, canvas.height - 40, 120, 30);
+            ctx.fillStyle = 'white';
+            ctx.textAlign = 'center';
+            ctx.fillText('1 PT (KICK)', canvas.width / 2, canvas.height - 20);
+        } else if (playType === 'normal') {
+            // Change Play Button
+            ctx.fillStyle = '#3498DB';
+            ctx.fillRect(canvas.width / 2 - 60, canvas.height - 80, 120, 30);
+            ctx.fillStyle = 'white';
+            ctx.textAlign = 'center';
+            ctx.fillText('Play: ' + offensivePlays[currentOffensivePlayIndex].name, canvas.width / 2, canvas.height - 60);
+
+            // Punt Button
+            ctx.fillStyle = '#E67E22';
+            ctx.fillRect(canvas.width / 2 - 90, canvas.height - 40, 80, 30);
+            ctx.fillStyle = 'white';
+            ctx.textAlign = 'center';
+            ctx.fillText('PUNT', canvas.width / 2 - 50, canvas.height - 20);
+
+            // Field Goal Button
+            ctx.fillStyle = '#2ECC71';
+            ctx.fillRect(canvas.width / 2 + 10, canvas.height - 40, 80, 30);
+            ctx.fillStyle = 'white';
+            ctx.textAlign = 'center';
+            ctx.fillText('FG', canvas.width / 2 + 50, canvas.height - 20);
+        }
     }
 
     if (currentState === GameState.PLAY_OVER) {
