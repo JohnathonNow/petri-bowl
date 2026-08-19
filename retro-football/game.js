@@ -971,6 +971,12 @@ function updatePlayers() {
             if (dist > speed) {
                 p.x += (dx / dist) * speed;
                 p.y += (dy / dist) * speed;
+
+                // Animation logic
+                p.facingRight = dx > 0;
+                p.animTimer = (p.animTimer || 0) + speed;
+            } else {
+                p.animTimer = 0;
             }
         }
 
@@ -992,6 +998,12 @@ function updateBall() {
         ball.x += ball.vx;
         ball.y += ball.vy;
         ball.z += ball.vz;
+
+        if (ball.isPunt) {
+            ball.rotation = (ball.rotation || 0) + 0.2;
+        } else {
+            ball.rotation = Math.atan2(ball.vy, ball.vx);
+        }
 
         if (ball.throwTimer > 0) {
             ball.throwTimer--;
@@ -1141,23 +1153,73 @@ function draw() {
         ctx.ellipse(p.x, p.y + 10, 12, 6, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        // Player body
-        ctx.fillStyle = p.team === 'offense' ? '#3498DB' : '#E74C3C';
-
         // Highlight active player
         if (idx === activePlayerIndex) {
             ctx.strokeStyle = '#F1C40F';
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.arc(p.x, p.y, p.diving ? 8 : 12, 0, Math.PI * 2);
+            ctx.arc(p.x, p.y, p.diving ? 8 : 14, 0, Math.PI * 2);
             ctx.stroke();
         }
 
-        ctx.fillRect(p.x - 8, p.y - (p.diving ? 4 : 16), 16, p.diving ? 8 : 16);
+        // Animation Bob
+        let bob = 0;
+        let legOffset = 0;
+        if (p.animTimer) {
+            bob = Math.sin(p.animTimer * 0.5) * 2;
+            legOffset = Math.sin(p.animTimer * 0.5) * 4;
+        }
 
-        // Helmet
-        ctx.fillStyle = '#F39C12';
-        ctx.fillRect(p.x - 6, p.y - (p.diving ? 4 : 20), 12, 8);
+        const teamColor = p.team === 'offense' ? '#3498DB' : '#E74C3C';
+        const isFacingRight = p.facingRight !== undefined ? p.facingRight : true;
+        const dir = isFacingRight ? 1 : -1;
+
+        if (p.diving) {
+            // Legs
+            ctx.fillStyle = '#ECF0F1'; // White pants
+            ctx.fillRect(p.x - 12, p.y - 2, 8, 4);
+            ctx.fillRect(p.x - 10, p.y + 2, 8, 4);
+
+            // Body
+            ctx.fillStyle = teamColor;
+            ctx.fillRect(p.x - 4, p.y - 4, 12, 8);
+
+            // Arm
+            ctx.fillStyle = '#F5B041'; // Skin tone
+            ctx.fillRect(p.x, p.y, 10, 3);
+
+            // Helmet
+            ctx.fillStyle = '#F39C12';
+            ctx.fillRect(p.x + 8, p.y - 4, 8, 8);
+            ctx.fillStyle = '#7F8C8D'; // Face mask
+            ctx.fillRect(p.x + 12, p.y - 2, 5, 4);
+        } else {
+            // Legs (animated)
+            ctx.fillStyle = '#ECF0F1'; // White pants
+            ctx.fillRect(p.x - 4, p.y - 4, 4, 8 + legOffset); // Back leg
+            ctx.fillRect(p.x + 2, p.y - 4, 4, 8 - legOffset); // Front leg
+
+            // Body
+            ctx.fillStyle = teamColor;
+            ctx.fillRect(p.x - 6, p.y - 14 + bob, 14, 10);
+
+            // Arms
+            ctx.fillStyle = '#F5B041'; // Skin tone
+            ctx.fillRect(p.x - 8, p.y - 12 + bob, 4, 8); // Back arm
+            ctx.fillRect(p.x + 6, p.y - 12 + bob, 4, 8); // Front arm
+
+            // Helmet
+            ctx.fillStyle = '#F39C12';
+            ctx.fillRect(p.x - 5, p.y - 22 + bob, 12, 10);
+
+            // Face mask direction
+            ctx.fillStyle = '#7F8C8D';
+            if (dir === 1) {
+                ctx.fillRect(p.x + 3, p.y - 18 + bob, 6, 6);
+            } else {
+                ctx.fillRect(p.x - 7, p.y - 18 + bob, 6, 6);
+            }
+        }
     });
 
     // Draw Player Routes
@@ -1198,14 +1260,24 @@ function draw() {
             ctx.fill();
         }
 
+        ctx.save();
+        ctx.translate(ball.x, ball.y - ball.z);
+        if (ball.rotation) {
+            ctx.rotate(ball.rotation);
+        }
+
         ctx.fillStyle = '#784212';
         ctx.beginPath();
-        ctx.ellipse(ball.x, ball.y - ball.z, 4 * ballScale, 6 * ballScale, 0, 0, Math.PI * 2);
+        // Since we are rotated, we draw a horizontal ellipse for the football shape.
+        ctx.ellipse(0, 0, 6 * ballScale, 4 * ballScale, 0, 0, Math.PI * 2);
         ctx.fill();
 
         // Laces
         ctx.fillStyle = 'white';
-        ctx.fillRect(ball.x - 1 * ballScale, ball.y - ball.z - 2 * ballScale, 2 * ballScale, 4 * ballScale);
+        // Laces in middle top
+        ctx.fillRect(-2 * ballScale, -2 * ballScale, 4 * ballScale, 2 * ballScale);
+
+        ctx.restore();
     }
 
     // Trajectory Indicator
